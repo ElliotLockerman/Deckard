@@ -9,7 +9,6 @@ use magnetic::spmc::spmc_queue;
 use magnetic::buffer::dynamic::DynamicBuffer;
 use magnetic::{Producer, Consumer};
 
-// use image_hasher::{ImageHash, HashType};
 use image_hasher::HasherConfig;
 
 use maplit::hashset;
