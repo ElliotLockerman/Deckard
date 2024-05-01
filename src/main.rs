@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 use std::thread;
+use std::io::Read;
 
 use eframe::egui;
 
@@ -22,6 +23,7 @@ struct App {
     root: PathBuf,
     thread: Option<std::thread::JoinHandle<Vec<Vec<PathBuf>>>>,
     results: Option<Vec<Vec<PathBuf>>>,
+    selected: Option<(usize, usize)>,
 }
 
 fn starting_root() -> PathBuf {
@@ -38,6 +40,7 @@ impl App {
             root: starting_root(),
             thread: None,
             results: None,
+            selected: None,
         }
     }
 
@@ -101,20 +104,46 @@ impl App {
 
         if let Some(results) = self.results.as_ref() {
             if results.len() > 0 {
-                let clicked = App::draw_results_table(ui, results);
-                if let Some((dup_idx, row)) = clicked {
-                    eprintln!("Clicked {dup_idx}:{row}");
-                }
+                // ui.horizontal(|ui| {
+                    let clicked = App::draw_results_table(ui, results);
+                    // let clicked = Some((1, 2));
+                    if clicked.is_some() {
+                        self.selected = clicked;
+                    }
+                    if let Some((dup_idx, row)) = self.selected {
+                        /*
+                        let path = url::Url::from_file_path(&results[dup_idx][row]).unwrap();
+
+                        eprintln!("Clicked {dup_idx}:{row}: {}", path.as_str());
+                        let uri = ImageSource::Uri(Cow::Borrowed(path.as_str()));
+                        ui.add(egui::Image::new(uri));
+                        */
+                        // ui.image(uri);
+
+                        let path = &results[dup_idx][row];
+                        let mut buffer = vec![];
+                        // TODO: save image, don't reload each rendering
+                        std::fs::File::open(path.clone()).unwrap().read_to_end(&mut buffer).unwrap();
+
+                        let handle = format!("{}", path.display());
+                        let image = egui::Image::from_bytes(handle, egui::load::Bytes::from(buffer));
+                        // image.show(ui);
+                        ui.add(image);
+
+                    }
+                // });
             }
         } else {
             ui.label(format!("Done on {}, found no dups", self.root.display()));
         }
+
+        ui.separator();
     }
 
     // Returns clicked (dup_idx, row)
     fn draw_results_table(ui: &mut egui::Ui, results: &Vec<Vec<PathBuf>>) -> Option<(usize, usize)> {
         let mut clicked = None;
-        egui::ScrollArea::vertical().show(ui, |ui| {
+        egui::ScrollArea::both().show(ui, |ui| {
             for (dup_idx, dups) in results.iter().enumerate() {
                 ui.separator();
                 ui.push_id(dup_idx, |ui| {
@@ -145,6 +174,7 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui_extras::install_image_loaders(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
             match self.mode {
                 Mode::Setup => self.startup(ctx, ui),

@@ -9,7 +9,8 @@ use magnetic::spmc::spmc_queue;
 use magnetic::buffer::dynamic::DynamicBuffer;
 use magnetic::{Producer, Consumer};
 
-use img_hash::{ImageHash, HashType};
+// use image_hasher::{ImageHash, HashType};
+use image_hasher::HasherConfig;
 
 use maplit::hashset;
 
@@ -40,6 +41,7 @@ pub fn search(
         let map = map.clone();
 
         threads.push(thread::spawn(move || {
+            let hasher = HasherConfig::new().to_hasher();
             while let Ok(v) = c1.pop() {
                 if let Some(path) = v {
                     let image = image::open(path.clone());
@@ -48,7 +50,9 @@ pub fn search(
                         continue;
                     }
 
-                    let hash = ImageHash::hash(&image.unwrap(), 8, HashType::Gradient);
+                    // let hash = ImageHash::hash(&image.unwrap(), 8, HashType::Gradient);
+                    let img = image.unwrap();
+                    let hash = hasher.hash_image(&img);
 
                     let mut map = map.lock().unwrap();
                     let v = map.entry(hash).or_insert(Vec::new());

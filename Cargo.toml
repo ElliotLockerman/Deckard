@@ -11,12 +11,7 @@ magnetic = "2.4.1"
 maplit = "1.0.2"
 num_cpus = "1.16.0"
 walkdir = "2.5.0"
+egui_extras = {version = "0.27.2", features = ["default", "all_loaders", "file", "image"]}
+image = {version = "0.24", features = ["jpeg"]}
+image_hasher = "1.2.0"
 
-# New versions don't work with img_hash
-image = "0.19"
-egui_extras = "0.27.2"
-
-[dependencies.img_hash]
-version = "2.1.0"
-# For interop with `image`:
-features = ["rust-image"]
