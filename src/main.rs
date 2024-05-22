@@ -136,9 +136,11 @@ impl App {
         if let Some(images) = self.images.as_ref() {
             if images.len() > 0 {
                 App::draw_results_table(ui, images);
+            } else {
+                ui.label(format!("Done on {}, found no duplicates", self.root.display()));
             }
         } else {
-            ui.label(format!("Done on {}, found no dups", self.root.display()));
+            ui.label(format!("Error, no results found"));
         }
 
         ui.separator();
