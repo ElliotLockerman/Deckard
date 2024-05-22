@@ -45,7 +45,9 @@ struct Image {
     path: PathBuf,
     handle: String,
     buffer: Bytes,
-    size: u64,
+    file_size: usize, // In bytes
+    width: u32,
+    height: u32,
 }
 
 struct App {
@@ -104,15 +106,21 @@ impl App {
                 for dups in &paths {
                     let mut vec = vec![];
                     for path in dups {
-                        let mut buffer = vec![];
                         // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
+                        let mut buffer = vec![];
                         let mut file = std::fs::File::open(path.clone()).unwrap();
                         file.read_to_end(&mut buffer).unwrap();
+                        let file_size = buffer.len();
+
+                        let img = image::load_from_memory(&buffer).unwrap();
+
                         vec.push(Image{
                             path: path.clone(),
                             handle: format!("{}", path.display()),
                             buffer: egui::load::Bytes::from(buffer),
-                            size: file.metadata().unwrap().len(),
+                            file_size,
+                            width: img.width(),
+                            height: img.height(),
                         });
                     }
                     images.push(vec);
@@ -166,7 +174,8 @@ impl App {
                                 let image = &dups[idx];
                                 row.col(|ui| {
                                     ui.heading(format!("{}", image.path.display()));
-                                    ui.label(format_size(image.size, DECIMAL));
+                                    ui.label(format!("{} x {}", image.width, image.height));
+                                    ui.label(format_size(image.file_size, DECIMAL));
                                     ui.horizontal(|ui| {
                                         if ui.button("Open").clicked() {
                                             open_file(image.path.as_path());
