@@ -1,9 +1,10 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::io::Read;
+use std::process::Command;
 
 use egui::load::Bytes;
 
@@ -12,6 +13,24 @@ use eframe::egui;
 use egui_extras::{TableBuilder, Column};
 
 mod search;
+
+
+// TODO: handle errors better
+// TODO: support platforms other than mac
+fn show_file(path: &Path) {
+    Command::new("open")
+        .args([std::ffi::OsStr::new("-R"), path.as_os_str()])
+        .output()
+        .expect("show_file");
+}
+
+fn open_file(path: &Path) {
+    Command::new("open")
+        .args([path])
+        .output()
+        .expect("show_file");
+}
+
 
 
 enum Mode {
@@ -53,9 +72,6 @@ impl App {
     fn startup(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         assert!(self.thread.is_none());
         assert!(self.images.is_none());
-        ui.heading("DupFind");
-
-        ui.separator();
 
         ui.label(format!("Root: {}", self.root.display()));
 
@@ -106,19 +122,11 @@ impl App {
             panic!("Where is my thread?");
         }
 
-        ui.heading("DupFind");
-
-        ui.separator();
-
         ui.label(format!("Running on {}...", self.root.display()));
 
     }
 
     fn output(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        ui.heading("DupFind");
-
-        ui.separator();
-
         if ui.button("<- New Search").clicked() {
             self.images = None;
             self.mode = Mode::Setup;
@@ -127,10 +135,7 @@ impl App {
 
         if let Some(images) = self.images.as_ref() {
             if images.len() > 0 {
-                let clicked = App::draw_results_table(ui, images);
-                if let Some((set, idx)) = clicked {
-                    println!("Clicked {}", images[set][idx].path.display());
-                }
+                App::draw_results_table(ui, images);
             }
         } else {
             ui.label(format!("Done on {}, found no dups", self.root.display()));
@@ -140,8 +145,7 @@ impl App {
     }
 
     // Returns clicked (dup_idx, row)
-    fn draw_results_table(ui: &mut egui::Ui, images: &Vec<Vec<Image>>) -> Option<(usize, usize)> {
-        let mut clicked = None;
+    fn draw_results_table(ui: &mut egui::Ui, images: &Vec<Vec<Image>>) {
         egui::ScrollArea::both().show(ui, |ui| {
             for (dup_idx, dups) in images.iter().enumerate() {
                 ui.separator();
@@ -149,29 +153,31 @@ impl App {
                     TableBuilder::new(ui)
                         .column(Column::remainder().resizable(true))
                         .column(Column::auto().resizable(true))
-                        .sense(egui::Sense::click())
                         .vscroll(false)
+                        .striped(true)
                         .body(|body| {
                             body.rows(100.0, dups.len(), |mut row| {
                                 let idx = row.index(); 
                                 let image = &dups[idx];
                                 row.col(|ui| {
-                                    if ui.label(format!("{}", image.path.display())).clicked() {
-                                        clicked = Some((dup_idx, idx));
-                                    }
+                                    ui.label(format!("{}", image.path.display()));
+                                    ui.horizontal(|ui| {
+                                        if ui.button("Open").clicked() {
+                                            open_file(image.path.as_path());
+                                        }
+                                        if ui.button("Show").clicked() {
+                                            show_file(image.path.as_path());
+                                        }
+                                    });
                                 });
                                 row.col(|ui| {
                                     ui.add(egui::Image::from_bytes(image.handle.clone(), image.buffer.clone()));
                                 });
-                                if row.response().clicked() {
-                                    clicked = Some((dup_idx, idx));
-                                }
                             });
                         });
                 });
             }
         });
-        clicked
     }
 
 }
