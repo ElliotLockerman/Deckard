@@ -14,4 +14,5 @@ walkdir = "2.5.0"
 egui_extras = {version = "0.27.2", features = ["default", "all_loaders", "file", "image"]}
 image = {version = "0.24", features = ["jpeg"]}
 image_hasher = "1.2.0"
+humansize = "2.1.3"
 

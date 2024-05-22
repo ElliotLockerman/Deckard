@@ -12,6 +12,8 @@ use eframe::egui;
 
 use egui_extras::{TableBuilder, Column};
 
+use humansize::{format_size, DECIMAL};
+
 mod search;
 
 
@@ -43,6 +45,7 @@ struct Image {
     path: PathBuf,
     handle: String,
     buffer: Bytes,
+    size: u64,
 }
 
 struct App {
@@ -81,8 +84,6 @@ impl App {
             }
         }
 
-        ui.separator();
-
         if ui.button("Search").clicked() {
             self.mode = Mode::Running;
             let root = self.root.clone();
@@ -105,11 +106,13 @@ impl App {
                     for path in dups {
                         let mut buffer = vec![];
                         // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
-                        std::fs::File::open(path.clone()).unwrap().read_to_end(&mut buffer).unwrap();
+                        let mut file = std::fs::File::open(path.clone()).unwrap();
+                        file.read_to_end(&mut buffer).unwrap();
                         vec.push(Image{
                             path: path.clone(),
                             handle: format!("{}", path.display()),
                             buffer: egui::load::Bytes::from(buffer),
+                            size: file.metadata().unwrap().len(),
                         });
                     }
                     images.push(vec);
@@ -162,7 +165,8 @@ impl App {
                                 let idx = row.index(); 
                                 let image = &dups[idx];
                                 row.col(|ui| {
-                                    ui.label(format!("{}", image.path.display()));
+                                    ui.heading(format!("{}", image.path.display()));
+                                    ui.label(format_size(image.size, DECIMAL));
                                     ui.horizontal(|ui| {
                                         if ui.button("Open").clicked() {
                                             open_file(image.path.as_path());
