@@ -99,34 +99,7 @@ impl App {
         if self.thread.is_some() {
             let done = self.thread.as_ref().unwrap().is_finished();
             if done {
-                let thread = self.thread.take().unwrap();
-                let paths = thread.join().unwrap();
-                let mut images = vec![];
-                // TODO: do this in a thread?
-                for dups in &paths {
-                    let mut vec = vec![];
-                    for path in dups {
-                        // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
-                        let mut buffer = vec![];
-                        let mut file = std::fs::File::open(path.clone()).unwrap();
-                        file.read_to_end(&mut buffer).unwrap();
-                        let file_size = buffer.len();
-
-                        let img = image::load_from_memory(&buffer).unwrap();
-
-                        vec.push(Image{
-                            path: path.clone(),
-                            handle: format!("{}", path.display()),
-                            buffer: egui::load::Bytes::from(buffer),
-                            file_size,
-                            width: img.width(),
-                            height: img.height(),
-                        });
-                    }
-                    images.push(vec);
-                }
-                self.images = Some(images);
-                self.mode = Mode::Output;
+                self.load_images();
                 return;
             }
         } else {
@@ -134,7 +107,40 @@ impl App {
         }
 
         ui.label(format!("Running on {}...", self.root.display()));
+        ui.spinner();
 
+    }
+
+    fn load_images(&mut self) {
+        let thread = self.thread.take().unwrap();
+        assert!(thread.is_finished());
+        let paths = thread.join().unwrap();
+        let mut images = vec![];
+        // TODO: do this in a thread?
+        for dups in &paths {
+            let mut vec = vec![];
+            for path in dups {
+                // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
+                let mut buffer = vec![];
+                let mut file = std::fs::File::open(path.clone()).unwrap();
+                file.read_to_end(&mut buffer).unwrap();
+                let file_size = buffer.len();
+
+                let img = image::load_from_memory(&buffer).unwrap();
+
+                vec.push(Image{
+                    path: path.clone(),
+                    handle: format!("{}", path.display()),
+                    buffer: egui::load::Bytes::from(buffer),
+                    file_size,
+                    width: img.width(),
+                    height: img.height(),
+                });
+            }
+            images.push(vec);
+        }
+        self.images = Some(images);
+        self.mode = Mode::Output;
     }
 
     fn output(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -143,6 +149,8 @@ impl App {
             self.mode = Mode::Setup;
             return;
         }
+
+        ui.separator();
 
         if let Some(images) = self.images.as_ref() {
             if images.len() > 0 {
@@ -153,15 +161,12 @@ impl App {
         } else {
             ui.label(format!("Error, no results found"));
         }
-
-        ui.separator();
     }
 
     // Returns clicked (dup_idx, row)
     fn draw_results_table(ui: &mut egui::Ui, images: &Vec<Vec<Image>>) {
         egui::ScrollArea::both().show(ui, |ui| {
             for (dup_idx, dups) in images.iter().enumerate() {
-                ui.separator();
                 ui.push_id(dup_idx, |ui| {
                     TableBuilder::new(ui)
                         .column(Column::remainder().resizable(true))
@@ -191,6 +196,7 @@ impl App {
                             });
                         });
                 });
+                ui.separator();
             }
         });
     }
