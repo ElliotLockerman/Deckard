@@ -46,8 +46,7 @@ struct Image {
     handle: String,
     buffer: Bytes,
     file_size: usize, // In bytes
-    width: u32,
-    height: u32,
+    dimm: Option<(u32, u32)>, // Width x height
 }
 
 struct App {
@@ -55,6 +54,7 @@ struct App {
     root: PathBuf,
     thread: Option<std::thread::JoinHandle<Vec<Vec<PathBuf>>>>,
     images: Option<Vec<Vec<Image>>>,
+    errors: Vec<String>,
 }
 
 fn starting_root() -> PathBuf {
@@ -71,12 +71,12 @@ impl App {
             root: starting_root(),
             thread: None,
             images: None,
+            errors: vec![],
         }
     }
 
     fn startup(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         assert!(self.thread.is_none());
-        assert!(self.images.is_none());
 
         ui.label(format!("Root: {}", self.root.display()));
 
@@ -122,19 +122,32 @@ impl App {
             for path in dups {
                 // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
                 let mut buffer = vec![];
-                let mut file = std::fs::File::open(path.clone()).unwrap();
-                file.read_to_end(&mut buffer).unwrap();
+                let mut file = match std::fs::File::open(path.clone()) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        self.errors.push(format!("Error opening {}: {}", path.display(), e.to_string()));
+                        continue;
+                    }
+                };
+                if let Err(e) = file.read_to_end(&mut buffer) {
+                    self.errors.push(format!("Error reading {}: {}", path.display(), e.to_string()));
+                    continue;
+
+                }
                 let file_size = buffer.len();
 
-                let img = image::load_from_memory(&buffer).unwrap();
+                let dimm = if let Ok(img) = image::load_from_memory(&buffer) {
+                    Some((img.width(), img.height()))
+                } else {
+                    None
+                };
 
                 vec.push(Image{
                     path: path.clone(),
                     handle: format!("{}", path.display()),
                     buffer: egui::load::Bytes::from(buffer),
                     file_size,
-                    width: img.width(),
-                    height: img.height(),
+                    dimm,
                 });
             }
             images.push(vec);
@@ -154,7 +167,7 @@ impl App {
 
         if let Some(images) = self.images.as_ref() {
             if images.len() > 0 {
-                App::draw_results_table(ui, images);
+                self.draw_results_table(ui);
             } else {
                 ui.label(format!("Done on {}, found no duplicates", self.root.display()));
             }
@@ -164,9 +177,10 @@ impl App {
     }
 
     // Returns clicked (dup_idx, row)
-    fn draw_results_table(ui: &mut egui::Ui, images: &Vec<Vec<Image>>) {
+    fn draw_results_table(&self, ui: &mut egui::Ui) {
+        assert!(self.images.is_some());
         egui::ScrollArea::both().show(ui, |ui| {
-            for (dup_idx, dups) in images.iter().enumerate() {
+            for (dup_idx, dups) in self.images.as_ref().unwrap().iter().enumerate() {
                 ui.push_id(dup_idx, |ui| {
                     TableBuilder::new(ui)
                         .column(Column::remainder().resizable(true))
@@ -179,7 +193,9 @@ impl App {
                                 let image = &dups[idx];
                                 row.col(|ui| {
                                     ui.heading(format!("{}", image.path.display()));
-                                    ui.label(format!("{} x {}", image.width, image.height));
+                                    if let Some((width, height)) = image.dimm {
+                                        ui.label(format!("{width}×{height}"));
+                                    }
                                     ui.label(format_size(image.file_size, DECIMAL));
                                     ui.horizontal(|ui| {
                                         if ui.button("Open").clicked() {
@@ -197,6 +213,13 @@ impl App {
                         });
                 });
                 ui.separator();
+            }
+
+            if self.errors.len() > 0 {
+                ui.heading(egui::RichText::new("Errors").color(egui::Color32::RED));
+                for err in &self.errors {
+                    ui.label(err);
+                }
             }
         });
     }
