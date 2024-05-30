@@ -24,7 +24,7 @@ pub fn open_file(path: &Path, open_kind: OpenKind) -> Result<(), String> {
             if output.status.success() {
                 Ok(())
             } else {
-                Err(String::from_utf8_lossy(&output.stdout).to_string())
+                Err(String::from_utf8_lossy(&output.stderr).to_string())
             }
         },
         Err(e) => {
