@@ -85,6 +85,7 @@ impl App {
         }
 
         if ui.button("Search").clicked() {
+            self.errors.clear();
             self.phase = Phase::Running;
             let root = self.root.clone();
             self.thread = Some(thread::spawn(move ||
