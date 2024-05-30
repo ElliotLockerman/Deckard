@@ -61,19 +61,15 @@ impl App {
         }
     }
 
-    // Returns true if a modal is being shown
-    fn handle_modal(&mut self, ctx: &egui::Context) -> bool {
+    fn handle_modal(&mut self, ctx: &egui::Context) {
         if let Some(contents) = &self.modal {
             if draw_error_modal(ctx, &contents) {
                 self.modal = None;
-                return false;
             }
-            return true;
         }
-        return false;
     }
 
-    fn phase_startup(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn phase_startup(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         assert!(self.thread.is_none());
 
         ui.label(format!("Root: {}", self.root.display()));
@@ -93,12 +89,9 @@ impl App {
             ));
         }
 
-        if self.handle_modal(ctx) {
-            return;
-        }
     }
 
-    fn phase_running(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn phase_running(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         if self.thread.is_some() {
             let done = self.thread.as_ref().unwrap().is_finished();
             if done {
@@ -111,11 +104,6 @@ impl App {
 
         ui.label(format!("Running on {}...", self.root.display()));
         ui.spinner();
-
-        if self.handle_modal(ctx) {
-            return;
-        }
-
 
     }
 
@@ -168,7 +156,7 @@ impl App {
         self.phase = Phase::Output;
     }
 
-    fn phase_output(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn phase_output(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         if ui.button("<- New Search").clicked() {
             self.images = None;
             self.phase = Phase::Setup;
@@ -186,11 +174,6 @@ impl App {
         } else {
             ui.label(format!("Error, no results found"));
         }
-
-        if self.handle_modal(ctx) {
-            return;
-        }
-
     }
 
     // Returns clicked (dup_idx, row)
@@ -262,6 +245,7 @@ impl eframe::App for App {
                 Phase::Output => self.phase_output(ctx, ui),
             }
         });
+        self.handle_modal(ctx);
     }
 }
 
