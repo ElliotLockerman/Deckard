@@ -36,7 +36,7 @@ struct Image {
 struct App {
     phase: Phase,
     root: PathBuf,
-    thread: Option<std::thread::JoinHandle<Vec<Vec<PathBuf>>>>,
+    thread: Option<std::thread::JoinHandle<search::SearchResults>>,
     images: Option<Vec<Vec<Image>>>,
     errors: Vec<String>,
     modal: Option<ModalContents>,
@@ -121,7 +121,11 @@ impl App {
     fn load_images(&mut self) {
         let thread = self.thread.take().unwrap();
         assert!(thread.is_finished());
-        let paths = thread.join().unwrap();
+        let results = thread.join().unwrap();
+
+        self.errors.extend(results.errors);
+        let paths = results.duplicates;
+
         let mut images = vec![];
         // TODO: do this in a thread?
         for dups in &paths {

@@ -13,12 +13,16 @@ use image_hasher::HasherConfig;
 
 use maplit::hashset;
 
+pub struct SearchResults {
+    pub duplicates: Vec<Vec<PathBuf>>,
+    pub errors: Vec<String>,
+}
 
 pub fn search(
     root: PathBuf,
     follow_sym: bool,
     max_depth: Option<usize>,
-    num_threads: Option<usize>) -> Vec<Vec<PathBuf>> {
+    num_threads: Option<usize>) -> SearchResults {
 
     let (p1, c1) = spmc_queue::<
             Option<std::path::PathBuf>,
@@ -28,6 +32,7 @@ pub fn search(
     let c1 = Arc::new(c1);
 
     let map = Arc::new(Mutex::new(HashMap::new()));
+    let errors = Arc::new(Mutex::new(vec![]));
 
     let num_threads = if let Some(x) = num_threads {
         x 
@@ -38,6 +43,7 @@ pub fn search(
     for _ in 1..=num_threads {
         let c1 = c1.clone();
         let map = map.clone();
+        let errors = errors.clone();
 
         threads.push(thread::spawn(move || {
             let hasher = HasherConfig::new().to_hasher();
@@ -45,7 +51,8 @@ pub fn search(
                 if let Some(path) = v {
                     let image = image::open(path.clone());
                     if let Err(e) = image {
-                        println!("Error for image {}: {}", path.display(), e);
+                        let err = format!("Error opening image {}: {}", path.display(), e);
+                        errors.lock().unwrap().push(err);
                         continue;
                     }
 
@@ -69,7 +76,8 @@ pub fn search(
     if let Some(d) = max_depth { walker = walker.max_depth(d); }
     for entry in walker {
         if let Err(e) = entry {
-            println!("Error: {}", e);
+            let err = format!("Error walking directory: {}", e);
+            errors.lock().unwrap().push(err);
             continue;
         }
 
@@ -94,9 +102,14 @@ pub fn search(
     }
 
     let map = map.lock().unwrap();
-    map.iter()
+    let duplicates = map.iter()
         .filter_map(|(_, x)| if x.len() > 1 { Some(x.clone()) } else { None })
-        .collect()
+        .collect();
+
+    SearchResults {
+        duplicates,
+        errors: Arc::into_inner(errors).unwrap().into_inner().unwrap(),
+    }
 }
 
 
