@@ -19,7 +19,7 @@ mod helpers;
 use helpers::*;
 
 
-enum Mode {
+enum Phase {
     Setup,
     Running,
     Output,
@@ -34,7 +34,7 @@ struct Image {
 }
 
 struct App {
-    mode: Mode,
+    phase: Phase,
     root: PathBuf,
     thread: Option<std::thread::JoinHandle<Vec<Vec<PathBuf>>>>,
     images: Option<Vec<Vec<Image>>>,
@@ -52,7 +52,7 @@ fn starting_root() -> PathBuf {
 impl App {
     fn new() -> App {
         App {
-            mode: Mode::Setup,
+            phase: Phase::Setup,
             root: starting_root(),
             thread: None,
             images: None,
@@ -73,7 +73,7 @@ impl App {
         return false;
     }
 
-    fn startup(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn phase_startup(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         if self.handle_modal(ctx) {
             return;
         }
@@ -88,7 +88,7 @@ impl App {
         }
 
         if ui.button("Search").clicked() {
-            self.mode = Mode::Running;
+            self.phase = Phase::Running;
             let root = self.root.clone();
             self.thread = Some(thread::spawn(move ||
                 search::search(root, false, None, None)
@@ -96,7 +96,7 @@ impl App {
         }
     }
 
-    fn running(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn phase_running(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         if self.handle_modal(ctx) {
             return;
         }
@@ -158,17 +158,17 @@ impl App {
             images.push(vec);
         }
         self.images = Some(images);
-        self.mode = Mode::Output;
+        self.phase = Phase::Output;
     }
 
-    fn output(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn phase_output(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         if self.handle_modal(ctx) {
             return;
         }
 
         if ui.button("<- New Search").clicked() {
             self.images = None;
-            self.mode = Mode::Setup;
+            self.phase = Phase::Setup;
             return;
         }
 
@@ -248,10 +248,10 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui_extras::install_image_loaders(ctx);
         egui::CentralPanel::default().show(ctx, |ui| {
-            match self.mode {
-                Mode::Setup => self.startup(ctx, ui),
-                Mode::Running => self.running(ctx, ui),
-                Mode::Output => self.output(ctx, ui),
+            match self.phase {
+                Phase::Setup => self.phase_startup(ctx, ui),
+                Phase::Running => self.phase_running(ctx, ui),
+                Phase::Output => self.phase_output(ctx, ui),
             }
         });
     }
