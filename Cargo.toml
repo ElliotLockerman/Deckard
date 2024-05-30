@@ -15,4 +15,5 @@ egui_extras = {version = "0.27.2", features = ["default", "all_loaders", "file",
 image = {version = "0.24", features = ["jpeg"]}
 image_hasher = "1.2.0"
 humansize = "2.1.3"
+egui-modal = "0.3.6"
 

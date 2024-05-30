@@ -49,7 +49,6 @@ pub fn search(
                         continue;
                     }
 
-                    // let hash = ImageHash::hash(&image.unwrap(), 8, HashType::Gradient);
                     let img = image.unwrap();
                     let hash = hasher.hash_image(&img);
 
@@ -64,12 +63,6 @@ pub fn search(
             unreachable!();
         }));
     }
-
-    /*
-    if !Path::new(&root).exists() {
-        return Err(SearchError::RootDoesntExist);
-    }
-    */
 
     let exts = hashset!{"jpg", "jpeg", "png", "gif", "webp"};
     let mut walker = WalkDir::new(root).follow_links(follow_sym);

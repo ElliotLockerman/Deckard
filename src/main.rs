@@ -1,10 +1,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::thread;
 use std::io::Read;
-use std::process::Command;
 
 use egui::load::Bytes;
 
@@ -15,24 +14,9 @@ use egui_extras::{TableBuilder, Column};
 use humansize::{format_size, DECIMAL};
 
 mod search;
+mod helpers;
 
-
-// TODO: handle errors better
-// TODO: support platforms other than mac
-fn show_file(path: &Path) {
-    Command::new("open")
-        .args([std::ffi::OsStr::new("-R"), path.as_os_str()])
-        .output()
-        .expect("show_file");
-}
-
-fn open_file(path: &Path) {
-    Command::new("open")
-        .args([path])
-        .output()
-        .expect("show_file");
-}
-
+use helpers::*;
 
 
 enum Mode {
@@ -55,6 +39,7 @@ struct App {
     thread: Option<std::thread::JoinHandle<Vec<Vec<PathBuf>>>>,
     images: Option<Vec<Vec<Image>>>,
     errors: Vec<String>,
+    modal: Option<ModalContents>,
 }
 
 fn starting_root() -> PathBuf {
@@ -72,10 +57,26 @@ impl App {
             thread: None,
             images: None,
             errors: vec![],
+            modal: None,
         }
     }
 
-    fn startup(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
+    // Returns true if a modal is being shown
+    fn handle_modal(&mut self, ctx: &egui::Context) -> bool {
+        if let Some(contents) = &self.modal {
+            if draw_error_modal(ctx, &contents) {
+                self.modal = None;
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    fn startup(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        if self.handle_modal(ctx) {
+            return;
+        }
         assert!(self.thread.is_none());
 
         ui.label(format!("Root: {}", self.root.display()));
@@ -95,7 +96,11 @@ impl App {
         }
     }
 
-    fn running(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn running(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        if self.handle_modal(ctx) {
+            return;
+        }
+
         if self.thread.is_some() {
             let done = self.thread.as_ref().unwrap().is_finished();
             if done {
@@ -156,7 +161,11 @@ impl App {
         self.mode = Mode::Output;
     }
 
-    fn output(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn output(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        if self.handle_modal(ctx) {
+            return;
+        }
+
         if ui.button("<- New Search").clicked() {
             self.images = None;
             self.mode = Mode::Setup;
@@ -177,7 +186,7 @@ impl App {
     }
 
     // Returns clicked (dup_idx, row)
-    fn draw_results_table(&self, ui: &mut egui::Ui) {
+    fn draw_results_table(&mut self,  ui: &mut egui::Ui) {
         assert!(self.images.is_some());
         egui::ScrollArea::both().show(ui, |ui| {
             for (dup_idx, dups) in self.images.as_ref().unwrap().iter().enumerate() {
@@ -198,11 +207,19 @@ impl App {
                                     }
                                     ui.label(format_size(image.file_size, DECIMAL));
                                     ui.horizontal(|ui| {
-                                        if ui.button("Open").clicked() {
-                                            open_file(image.path.as_path());
-                                        }
-                                        if ui.button("Show").clicked() {
-                                            show_file(image.path.as_path());
+                                        let err = if ui.button("Open").clicked() {
+                                            open_file(image.path.as_path(), OpenKind::Open)
+                                        } else if ui.button("Show").clicked() {
+                                            open_file(image.path.as_path(), OpenKind::Reveal)
+                                        } else {
+                                            Ok(())
+                                        };
+
+                                        if let Err(msg) = err {
+                                            self.modal = Some(ModalContents::new(
+                                                "Error showing file".to_string(),
+                                                msg,
+                                            ));
                                         }
                                     });
                                 });
