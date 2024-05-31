@@ -38,6 +38,8 @@ struct App {
     phase: Phase,
     root: PathBuf,
     follow_sym: bool,
+    limit_depth: bool,
+    depth_limit: String,
     thread: Option<std::thread::JoinHandle<search::SearchResults>>,
     images: Option<Vec<Vec<Image>>>,
     errors: Vec<String>,
@@ -57,6 +59,8 @@ impl App {
             phase: Phase::Startup,
             root: default_root(),
             follow_sym: true,
+            limit_depth: false,
+            depth_limit: String::new(),
             thread: None,
             images: None,
             errors: vec![],
@@ -81,6 +85,11 @@ impl App {
 
         ui.collapsing("Advanced", |ui| {
             ui.checkbox(&mut self.follow_sym, "Follow Symlinks");
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.limit_depth, "Depth Limit");
+                let depth_field = egui::TextEdit::singleline(&mut self.depth_limit);
+                ui.add_enabled(self.limit_depth, depth_field);
+            });
         });
 
         if ui.button("Search").clicked() {
@@ -135,11 +144,31 @@ impl App {
         assert!(self.phase == Phase::Startup);
         assert!(self.thread.is_none());
         assert!(self.modal.is_none());
-        self.phase = Phase::Running;
         let root = self.root.clone();
         let follow_sym = self.follow_sym;
+        let mut depth_limit = None;
+        if self.limit_depth {
+            match self.depth_limit.parse::<usize>() {
+                Ok(x) => depth_limit = Some(x),
+                Err(e) => {
+                    self.modal = Some(ModalContents::new(
+                        "Error parsing depth limit".to_string(),
+                        e.to_string(),
+                    ));
+                    return;
+                },
+            }
+            if depth_limit == Some(0usize) {
+                self.modal = Some(ModalContents::new(
+                    "Invalid depth limit".to_string(),
+                    "A depth limit of 0 doesn't search at all".to_string(),
+                ));
+                return;
+            }
+        }
+        self.phase = Phase::Running;
         self.thread = Some(thread::spawn(move ||
-            search::search(root, follow_sym, None, None)
+            search::search(root, follow_sym, depth_limit, None)
         ));
     }
 
