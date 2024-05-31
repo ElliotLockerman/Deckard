@@ -27,7 +27,7 @@ pub fn search(
     let (p1, c1) = spmc_queue::<
             Option<std::path::PathBuf>,
             DynamicBuffer<Option<std::path::PathBuf>>
-        >(DynamicBuffer::new(32).unwrap());
+        >(DynamicBuffer::new(32).expect("Error allocationg spmc buffer"));
 
     let c1 = Arc::new(c1);
 
@@ -44,27 +44,25 @@ pub fn search(
 
         threads.push(thread::spawn(move || {
             let hasher = HasherConfig::new().to_hasher();
-            while let Ok(v) = c1.pop() {
-                if let Some(path) = v {
-                    let image = image::open(path.clone());
-                    if let Err(e) = image {
+            loop {
+                let path = match c1.pop().expect("queue pop error") {
+                    Some(x) => x,
+                    None => return, // We're done!
+                };
+                let image = match image::open(path.clone()) {
+                    Ok(x) => x,
+                    Err(e) => {
                         let err = format!("Error opening image {}: {}", path.display(), e);
-                        errors.lock().unwrap().push(err);
+                        errors.lock().expect("error vec lock error").push(err);
                         continue;
-                    }
+                    },
+                };
 
-                    let img = image.unwrap();
-                    let hash = hasher.hash_image(&img);
-
-                    let mut map = map.lock().unwrap();
-                    let v = map.entry(hash).or_insert(Vec::new());
-                    v.push(path);
-                } else {
-                    return;
-                }
-
+                let hash = hasher.hash_image(&image);
+                let mut map = map.lock().expect("image hash hashmap lock error");
+                let v = map.entry(hash).or_insert(Vec::new());
+                v.push(path);
             }
-            unreachable!();
         }));
     }
 
@@ -72,40 +70,44 @@ pub fn search(
     let mut walker = WalkDir::new(root).follow_links(follow_sym);
     if let Some(d) = max_depth { walker = walker.max_depth(d); }
     for entry in walker {
-        if let Err(e) = entry {
-            let err = format!("Error walking directory: {}", e);
-            errors.lock().unwrap().push(err);
-            continue;
-        }
-
-
-        let entry = entry.unwrap();
+        let entry = match entry {
+            Ok(x) => x,
+            Err(e) => {
+                let err = format!("Error walking directory: {}", e);
+                errors.lock().expect("error vec lock error").push(err);
+                continue;
+            },
+        };
         if entry.file_type().is_dir() { continue; }
 
         let path = entry.path();
         if let Some(ext) = path.extension() {
             let s = ext.to_string_lossy();
             if !exts.contains(&*s) { continue; }
-            p1.push(Some(path.to_owned())).unwrap();
+            p1.push(Some(path.to_owned())).expect("queue push error");
         }
     }
 
     for _ in 1..=threads.len() {
-        p1.push(None).unwrap();
+        p1.push(None).expect("queue push error");
     }
 
     for t in threads {
-        t.join().unwrap();
+        t.join().expect("thread join error");
     }
 
-    let map = Arc::into_inner(map).unwrap().into_inner().unwrap();
+    let map = Arc::into_inner(map).expect("arc into_inner error")
+        .into_inner().expect("mutex into_inner");
     let duplicates = map.into_iter()
         .filter_map(|(_, x)| if x.len() > 1 { Some(x) } else { None })
         .collect();
 
+    let errors = Arc::into_inner(errors).expect("arc into_inner error")
+        .into_inner().expect("mutex into_inner error");
+
     SearchResults {
         duplicates,
-        errors: Arc::into_inner(errors).unwrap().into_inner().unwrap(),
+        errors,
     }
 }
 
