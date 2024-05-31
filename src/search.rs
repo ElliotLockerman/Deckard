@@ -22,7 +22,7 @@ pub fn search(
     root: PathBuf,
     follow_sym: bool,
     max_depth: Option<usize>,
-    num_threads: Option<usize>) -> SearchResults {
+    num_threads: u32) -> SearchResults {
 
     let (p1, c1) = spmc_queue::<
             Option<std::path::PathBuf>,
@@ -33,8 +33,6 @@ pub fn search(
 
     let map = Arc::new(Mutex::new(HashMap::new()));
     let errors = Arc::new(Mutex::new(vec![]));
-
-    let num_threads = num_threads.unwrap_or_else(|| num_cpus::get());
 
     let mut threads = Vec::new();
     for _ in 1..=num_threads {

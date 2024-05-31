@@ -40,6 +40,7 @@ struct App {
     follow_sym: bool,
     limit_depth: bool,
     depth_limit: String,
+    num_worker_threads: String,
     thread: Option<std::thread::JoinHandle<search::SearchResults>>,
     images: Option<Vec<Vec<Image>>>,
     errors: Vec<String>,
@@ -61,6 +62,7 @@ impl App {
             follow_sym: true,
             limit_depth: false,
             depth_limit: String::new(),
+            num_worker_threads: num_cpus::get().to_string(),
             thread: None,
             images: None,
             errors: vec![],
@@ -89,6 +91,11 @@ impl App {
                 ui.checkbox(&mut self.limit_depth, "Depth Limit");
                 let depth_field = egui::TextEdit::singleline(&mut self.depth_limit);
                 ui.add_enabled(self.limit_depth, depth_field);
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Num Worker Threads");
+                ui.text_edit_singleline(&mut self.num_worker_threads);
             });
         });
 
@@ -146,6 +153,7 @@ impl App {
         assert!(self.modal.is_none());
         let root = self.root.clone();
         let follow_sym = self.follow_sym;
+
         let mut depth_limit = None;
         if self.limit_depth {
             match self.depth_limit.parse::<usize>() {
@@ -166,9 +174,28 @@ impl App {
                 return;
             }
         }
+
+        let num_worker_threads = match self.num_worker_threads.parse::<u32>() {
+            Ok(x) => x,
+            Err(e) => {
+                self.modal = Some(ModalContents::new(
+                    "Error parsing num worker threads".to_string(),
+                    e.to_string(),
+                ));
+                return;
+            },
+        };
+        if num_worker_threads == 0 {
+            self.modal = Some(ModalContents::new(
+                "Invalid num worker threads".to_string(),
+                "At least 1 worker thread is required".to_string(),
+            ));
+            return;
+        }
+
         self.phase = Phase::Running;
         self.thread = Some(thread::spawn(move ||
-            search::search(root, follow_sym, depth_limit, None)
+            search::search(root, follow_sym, depth_limit, num_worker_threads)
         ));
     }
 
