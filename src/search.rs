@@ -34,11 +34,8 @@ pub fn search(
     let map = Arc::new(Mutex::new(HashMap::new()));
     let errors = Arc::new(Mutex::new(vec![]));
 
-    let num_threads = if let Some(x) = num_threads {
-        x 
-    } else {
-        num_cpus::get()
-    };
+    let num_threads = num_threads.unwrap_or_else(|| num_cpus::get());
+
     let mut threads = Vec::new();
     for _ in 1..=num_threads {
         let c1 = c1.clone();
@@ -101,9 +98,9 @@ pub fn search(
         t.join().unwrap();
     }
 
-    let map = map.lock().unwrap();
-    let duplicates = map.iter()
-        .filter_map(|(_, x)| if x.len() > 1 { Some(x.clone()) } else { None })
+    let map = Arc::into_inner(map).unwrap().into_inner().unwrap();
+    let duplicates = map.into_iter()
+        .filter_map(|(_, x)| if x.len() > 1 { Some(x) } else { None })
         .collect();
 
     SearchResults {
