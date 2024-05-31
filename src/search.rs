@@ -68,7 +68,7 @@ pub fn search(
         }));
     }
 
-    let exts = hashset!{"jpg", "jpeg", "png", "gif", "webp"};
+    let exts = hashset!{"jpg", "jpeg", "avif", "bmp", "dds", "exr", "gif", "hdr", "ico", "png", "pnm", "qoi", "tga", "tiff", "webp"};
     let mut walker = WalkDir::new(root).follow_links(follow_sym);
     if let Some(d) = max_depth { walker = walker.max_depth(d); }
     for entry in walker {
