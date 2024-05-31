@@ -89,15 +89,11 @@ impl App {
     }
 
     fn phase_running(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        if self.thread.is_some() {
-            let done = self.thread.as_ref().unwrap().is_finished();
-            if done {
-                let images = self.load_images();
-                self.start_output(images);
-                return;
-            }
-        } else {
-            panic!("Where is my thread?");
+        let thread = self.thread.as_ref().expect("running phase thread missing");
+        if thread.is_finished() {
+            let images = self.load_images();
+            self.start_output(images);
+            return;
         }
 
         ui.label(format!("Running on {}...", self.root.display()));
@@ -129,6 +125,7 @@ impl App {
 
     fn start_startup(&mut self) {
         assert!(self.thread.is_none());
+        assert!(self.modal.is_none());
         self.errors.clear();
         self.images = None;
         self.phase = Phase::Startup;
@@ -137,9 +134,9 @@ impl App {
     fn start_running(&mut self) {
         assert!(self.phase == Phase::Startup);
         assert!(self.thread.is_none());
+        assert!(self.modal.is_none());
         self.phase = Phase::Running;
         let root = self.root.clone();
-        println!("Follow Symlinks: {}", self.follow_sym);
         let follow_sym = self.follow_sym;
         self.thread = Some(thread::spawn(move ||
             search::search(root, follow_sym, None, None)
@@ -149,6 +146,7 @@ impl App {
     fn start_output(&mut self, images: Vec<Vec<Image>>) {
         assert!(self.phase == Phase::Running);
         assert!(self.thread.is_none());
+        assert!(self.modal.is_none());
         self.images = Some(images);
         self.phase = Phase::Output;
     }
@@ -227,15 +225,15 @@ impl App {
 ////////////////////////////////////////////////////////////////////////////////
 
     fn load_images(&mut self) -> Vec<Vec<Image>> {
-        let thread = self.thread.take().unwrap();
+        let thread = self.thread.take().expect("thread missing");
         assert!(thread.is_finished());
-        let results = thread.join().unwrap();
+        let results = thread.join().expect("thread join error");
 
         self.errors.extend(results.errors);
         let paths = results.duplicates;
 
         let mut images = vec![];
-        // TODO: do this in a thread?
+        // TODO: do this in a thread (it doesn't seem to be a problem in practice)?
         for dups in &paths {
             let mut vec = vec![];
             for path in dups {
@@ -255,11 +253,9 @@ impl App {
                 }
                 let file_size = buffer.len();
 
-                let dimm = if let Ok(img) = image::load_from_memory(&buffer) {
-                    Some((img.width(), img.height()))
-                } else {
-                    None
-                };
+                let dimm = image::load_from_memory(&buffer).ok().map(|img| {
+                    (img.width(), img.height())
+                });
 
                 vec.push(Image{
                     path: path.clone(),
