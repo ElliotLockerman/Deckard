@@ -37,6 +37,7 @@ struct Image {
 struct App {
     phase: Phase,
     root: PathBuf,
+    follow_sym: bool,
     thread: Option<std::thread::JoinHandle<search::SearchResults>>,
     images: Option<Vec<Vec<Image>>>,
     errors: Vec<String>,
@@ -55,6 +56,7 @@ impl App {
         App {
             phase: Phase::Startup,
             root: default_root(),
+            follow_sym: true,
             thread: None,
             images: None,
             errors: vec![],
@@ -76,6 +78,10 @@ impl App {
                 self.root = path;
             }
         }
+
+        ui.collapsing("Advanced", |ui| {
+            ui.checkbox(&mut self.follow_sym, "Follow Symlinks");
+        });
 
         if ui.button("Search").clicked() {
             self.start_running();
@@ -133,8 +139,10 @@ impl App {
         assert!(self.thread.is_none());
         self.phase = Phase::Running;
         let root = self.root.clone();
+        println!("Follow Symlinks: {}", self.follow_sym);
+        let follow_sym = self.follow_sym;
         self.thread = Some(thread::spawn(move ||
-            search::search(root, false, None, None)
+            search::search(root, follow_sym, None, None)
         ));
     }
 
