@@ -77,13 +77,18 @@ impl App {
     fn phase_startup(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         assert!(self.thread.is_none());
 
-        ui.label(format!("Root: {}", self.root.display()));
+        ui.horizontal(|ui| {
+            ui.strong("Root: ".to_string());
+            ui.monospace(format!("{}", self.root.display()));
+        });
 
-        if ui.button("Choose root...").clicked() {
+        if ui.button("Choose...").clicked() {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
                 self.root = path;
             }
         }
+
+        ui.separator();
 
         ui.collapsing("Advanced", |ui| {
             ui.checkbox(&mut self.follow_sym, "Follow Symlinks");
@@ -99,6 +104,8 @@ impl App {
             });
         });
 
+        ui.separator();
+
         if ui.button("Search").clicked() {
             self.start_running();
         }
@@ -112,8 +119,15 @@ impl App {
             return;
         }
 
-        ui.label(format!("Running on {}...", self.root.display()));
-        ui.spinner();
+        ui.horizontal(|ui| {
+            ui.strong(format!("Running on"));
+            ui.monospace(format!("{}", self.root.display()));
+        });
+
+        ui.centered_and_justified(|ui| {
+            let spinner = egui::widgets::Spinner::new().size(256.0);
+            ui.add(spinner);
+        });
     }
 
     fn phase_output(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -226,7 +240,11 @@ impl App {
                                 let idx = row.index(); 
                                 let image = &dups[idx];
                                 row.col(|ui| {
-                                    ui.heading(format!("{}", image.path.display()));
+                                    ui.label(
+                                        egui::RichText::new(format!("{}", image.path.display()))
+                                            .monospace()
+                                            .size(13.0)
+                                    );
                                     if let Some((width, height)) = image.dimm {
                                         ui.label(format!("{width}×{height}"));
                                     }
