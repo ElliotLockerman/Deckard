@@ -4,6 +4,8 @@
 use std::path::PathBuf;
 use std::thread;
 use std::io::Read;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use egui::load::Bytes;
 
@@ -42,6 +44,7 @@ struct App {
     depth_limit: String,
     num_worker_threads: String,
     thread: Option<std::thread::JoinHandle<search::SearchResults>>,
+    cancel: Arc<AtomicBool>,
     images: Option<Vec<Vec<Image>>>,
     errors: Vec<String>,
     modal: Option<ModalContents>,
@@ -63,6 +66,7 @@ impl App {
             limit_depth: false,
             depth_limit: String::new(),
             num_worker_threads: num_cpus::get().to_string(),
+            cancel: Arc::new(AtomicBool::new(false)),
             thread: None,
             images: None,
             errors: vec![],
@@ -114,10 +118,22 @@ impl App {
     fn phase_running(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         let thread = self.thread.as_ref().expect("running phase thread missing");
         if thread.is_finished() {
-            let images = self.load_images();
-            self.start_output(images);
+            if self.cancel.load(Ordering::Relaxed) {
+                self.thread.take().unwrap().join().expect("thread join error");
+                self.start_startup();
+            } else {
+                let images = self.load_images();
+                self.start_output(images);
+            }
             return;
         }
+
+        if ui.button("<- New Search").clicked() {
+            self.cancel.store(true, Ordering::Relaxed);
+        }
+
+        ui.separator();
+
 
         ui.horizontal(|ui| {
             ui.strong(format!("Running on"));
@@ -207,10 +223,12 @@ impl App {
             return;
         }
 
+        self.cancel.store(false, Ordering::Relaxed);
+        let cancel = self.cancel.clone();
         self.phase = Phase::Running;
-        self.thread = Some(thread::spawn(move ||
-            search::search(root, follow_sym, depth_limit, num_worker_threads)
-        ));
+        self.thread = Some(thread::spawn(move || {
+            search::search(root, follow_sym, depth_limit, num_worker_threads, cancel)
+        }));
     }
 
     fn start_output(&mut self, images: Vec<Vec<Image>>) {

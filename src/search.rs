@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::thread;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 
 use walkdir::WalkDir;
@@ -22,7 +23,8 @@ pub fn search(
     root: PathBuf,
     follow_sym: bool,
     max_depth: Option<usize>,
-    num_threads: u32) -> SearchResults {
+    num_threads: u32,
+    cancel: Arc<AtomicBool>) -> SearchResults {
 
     let (p1, c1) = spmc_queue::<
             Option<std::path::PathBuf>,
@@ -84,6 +86,10 @@ pub fn search(
             if !exts.contains(&*s) { continue; }
             p1.push(Some(path.to_owned())).expect("queue push error");
         }
+
+        if cancel.load(Ordering::Relaxed) {
+            break;
+        }
     }
 
     for _ in 1..=threads.len() {
@@ -92,6 +98,13 @@ pub fn search(
 
     for t in threads {
         t.join().expect("thread join error");
+    }
+
+    if cancel.load(Ordering::Relaxed) {
+        return SearchResults {
+            duplicates: vec![],
+            errors: vec![],
+        };
     }
 
     let map = Arc::into_inner(map).expect("arc into_inner error")
