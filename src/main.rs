@@ -130,6 +130,7 @@ impl App {
 
     fn start_running(&mut self) {
         assert!(self.phase == Phase::Startup);
+        assert!(self.thread.is_none());
         self.phase = Phase::Running;
         let root = self.root.clone();
         self.thread = Some(thread::spawn(move ||
