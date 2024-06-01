@@ -4,8 +4,6 @@
 use std::path::PathBuf;
 use std::thread;
 use std::io::Read;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 use egui::load::Bytes;
 
@@ -19,6 +17,7 @@ mod search;
 mod helpers;
 
 use helpers::*;
+use search::Searcher;
 
 
 #[derive(PartialEq, Eq)]
@@ -41,10 +40,10 @@ struct App {
     root: PathBuf,
     follow_sym: bool,
     limit_depth: bool,
-    depth_limit: String,
+    max_depth: String,
     num_worker_threads: String,
     thread: Option<std::thread::JoinHandle<search::SearchResults>>,
-    cancel: Arc<AtomicBool>,
+    searcher: Option<Searcher>,
     images: Option<Vec<Vec<Image>>>,
     errors: Vec<String>,
     modal: Option<ModalContents>,
@@ -64,9 +63,9 @@ impl App {
             root: default_root(),
             follow_sym: true,
             limit_depth: false,
-            depth_limit: String::new(),
+            max_depth: String::new(),
             num_worker_threads: num_cpus::get().to_string(),
-            cancel: Arc::new(AtomicBool::new(false)),
+            searcher: None,
             thread: None,
             images: None,
             errors: vec![],
@@ -79,7 +78,7 @@ impl App {
 ////////////////////////////////////////////////////////////////////////////////
 
     fn phase_startup(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        assert!(self.thread.is_none());
+        assert!(self.searcher.is_none());
 
         ui.horizontal(|ui| {
             ui.strong("Root: ".to_string());
@@ -98,7 +97,7 @@ impl App {
             ui.checkbox(&mut self.follow_sym, "Follow Symlinks");
             ui.horizontal(|ui| {
                 ui.checkbox(&mut self.limit_depth, "Depth Limit");
-                let depth_field = egui::TextEdit::singleline(&mut self.depth_limit);
+                let depth_field = egui::TextEdit::singleline(&mut self.max_depth);
                 ui.add_enabled(self.limit_depth, depth_field);
             });
 
@@ -116,10 +115,10 @@ impl App {
     }
 
     fn phase_running(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        let thread = self.thread.as_ref().expect("running phase thread missing");
-        if thread.is_finished() {
-            if self.cancel.load(Ordering::Relaxed) {
-                self.thread.take().unwrap().join().expect("thread join error");
+        let searcher = self.searcher.as_ref().expect("searcher missing");
+        if searcher.is_finished() {
+            if self.searcher.as_ref().expect("missing searcher").was_canceled() {
+                self.searcher.take().unwrap().join();
                 self.start_startup();
             } else {
                 let images = self.load_images();
@@ -129,7 +128,7 @@ impl App {
         }
 
         if ui.button("<- New Search").clicked() {
-            self.cancel.store(true, Ordering::Relaxed);
+            self.searcher.as_ref().expect("missing searcher").cancel();
         }
 
         ui.separator();
@@ -170,7 +169,7 @@ impl App {
 ////////////////////////////////////////////////////////////////////////////////
 
     fn start_startup(&mut self) {
-        assert!(self.thread.is_none());
+        assert!(self.searcher.is_none());
         assert!(self.modal.is_none());
         self.errors.clear();
         self.images = None;
@@ -179,15 +178,13 @@ impl App {
 
     fn start_running(&mut self) {
         assert!(self.phase == Phase::Startup);
-        assert!(self.thread.is_none());
+        assert!(self.searcher.is_none());
         assert!(self.modal.is_none());
-        let root = self.root.clone();
-        let follow_sym = self.follow_sym;
 
-        let mut depth_limit = None;
+        let mut max_depth = None;
         if self.limit_depth {
-            match self.depth_limit.parse::<usize>() {
-                Ok(x) => depth_limit = Some(x),
+            match self.max_depth.parse::<usize>() {
+                Ok(x) => max_depth = Some(x),
                 Err(e) => {
                     self.modal = Some(ModalContents::new(
                         "Error parsing depth limit".to_string(),
@@ -196,7 +193,7 @@ impl App {
                     return;
                 },
             }
-            if depth_limit == Some(0usize) {
+            if max_depth == Some(0usize) {
                 self.modal = Some(ModalContents::new(
                     "Invalid depth limit".to_string(),
                     "A depth limit of 0 doesn't search at all".to_string(),
@@ -205,7 +202,7 @@ impl App {
             }
         }
 
-        let num_worker_threads = match self.num_worker_threads.parse::<u32>() {
+        let num_worker_threads = match self.num_worker_threads.parse::<usize>() {
             Ok(x) => x,
             Err(e) => {
                 self.modal = Some(ModalContents::new(
@@ -223,17 +220,20 @@ impl App {
             return;
         }
 
-        self.cancel.store(false, Ordering::Relaxed);
-        let cancel = self.cancel.clone();
+        let mut searcher = Searcher::new(
+            self.root.clone(),
+            self.follow_sym,
+            num_worker_threads,
+            max_depth,
+        );
+        searcher.launch_search();
+        self.searcher = Some(searcher);
         self.phase = Phase::Running;
-        self.thread = Some(thread::spawn(move || {
-            search::search(root, follow_sym, depth_limit, num_worker_threads, cancel)
-        }));
     }
 
     fn start_output(&mut self, images: Vec<Vec<Image>>) {
         assert!(self.phase == Phase::Running);
-        assert!(self.thread.is_none());
+        assert!(self.searcher.is_none());
         assert!(self.modal.is_none());
         self.images = Some(images);
         self.phase = Phase::Output;
@@ -317,9 +317,9 @@ impl App {
 ////////////////////////////////////////////////////////////////////////////////
 
     fn load_images(&mut self) -> Vec<Vec<Image>> {
-        let thread = self.thread.take().expect("thread missing");
-        assert!(thread.is_finished());
-        let results = thread.join().expect("thread join error");
+        assert!(self.searcher.is_some());
+        assert!(self.searcher.as_ref().unwrap().is_finished());
+        let results = self.searcher.take().unwrap().join();
 
         self.errors.extend(results.errors);
         let paths = results.duplicates;
