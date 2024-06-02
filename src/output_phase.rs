@@ -1,5 +1,5 @@
 
-use crate::{Phase, Action, Image, ModalContents};
+use crate::{Phase, Action, Image, Modal};
 use crate::startup_phase::StartupPhase;
 
 use std::path::PathBuf;
@@ -26,7 +26,7 @@ impl OutputPhase {
         }
     }
 
-    fn draw_output_table(&mut self,  ui: &mut egui::Ui) -> Option<ModalContents> {
+    fn draw_output_table(&mut self,  ui: &mut egui::Ui) -> Option<Modal> {
         let mut modal_contents = None;
         egui::ScrollArea::both().show(ui, |ui| {
             for (dup_idx, dups) in self.images.iter().enumerate() {
@@ -60,7 +60,7 @@ impl OutputPhase {
                                         };
 
                                         if let Err(msg) = err {
-                                            modal_contents = Some(ModalContents::new(
+                                            modal_contents = Some(Modal::new(
                                                 "Error showing file".to_string(),
                                                 msg,
                                             ));

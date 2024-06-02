@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use egui::load::Bytes;
 use eframe::egui;
-use egui_modal::Modal;
+use egui_modal;
 
 
 struct Image {
@@ -28,7 +28,7 @@ type DynPhase = Box<dyn Phase>;
 enum Action {
     None,
     Trans(DynPhase),
-    Modal(ModalContents),
+    Modal(Modal),
 }
 
 trait Phase {
@@ -37,35 +37,35 @@ trait Phase {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-struct ModalContents {
+struct Modal {
     title: String,
     body: String,
 }
 
-impl ModalContents {
-    fn new(title: String, body: String) -> ModalContents {
-        ModalContents{title, body}
+impl Modal {
+    fn new(title: String, body: String) -> Modal {
+        Modal{title, body}
     }
-}
 
-// Returns true if closed
-fn draw_error_modal(ctx: &egui::Context, contents: &ModalContents) -> bool {
-    let modal = Modal::new(ctx, "error_modal");
-    let mut close_clicked = false;
-    modal.show(|ui| {
-        modal.title(ui, &contents.title);
-        modal.frame(ui, |ui| {
-            modal.body(ui, &contents.body);
+    // Returns true if closed
+    fn draw(&self, ctx: &egui::Context) -> bool {
+        let modal = egui_modal::Modal::new(ctx, "error_modal");
+        let mut close_clicked = false;
+        modal.show(|ui| {
+            modal.title(ui, &self.title);
+            modal.frame(ui, |ui| {
+                modal.body(ui, &self.body);
+            });
+            modal.buttons(ui, |ui| {
+                if modal.button(ui, "Close").clicked() {
+                    close_clicked = true;
+                }
+            });
         });
-        modal.buttons(ui, |ui| {
-            if modal.button(ui, "Close").clicked() {
-                close_clicked = true;
-            }
-        });
-    });
-    modal.open();
+        modal.open();
 
-    close_clicked
+        close_clicked
+    }
 }
 
 
@@ -73,7 +73,7 @@ fn draw_error_modal(ctx: &egui::Context, contents: &ModalContents) -> bool {
 
 struct App {
     phase: Box<dyn Phase>,
-    modal: Option<ModalContents>,
+    modal: Option<Modal>,
 }
 
 fn default_root() -> PathBuf {
@@ -113,8 +113,8 @@ impl eframe::App for App {
         });
 
 
-        if let Some(contents) = &self.modal {
-            if draw_error_modal(ctx, &contents) {
+        if let Some(modal) = &self.modal {
+            if modal.draw(ctx) {
                 self.modal = None;
             }
         }

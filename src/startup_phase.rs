@@ -1,5 +1,5 @@
 
-use crate::{Phase, Action, ModalContents};
+use crate::{Phase, Action, Modal};
 use crate::searching_phase::SearchingPhase;
 use crate::search::Searcher;
 
@@ -32,14 +32,14 @@ impl StartupPhase {
             match self.max_depth.parse::<usize>() {
                 Ok(x) => max_depth = Some(x),
                 Err(e) => {
-                    return Action::Modal(ModalContents::new(
+                    return Action::Modal(Modal::new(
                         "Error parsing depth limit".to_string(),
                         e.to_string(),
                     ))
                 },
             }
             if max_depth == Some(0usize) {
-                return Action::Modal(ModalContents::new(
+                return Action::Modal(Modal::new(
                     "Invalid depth limit".to_string(),
                     "A depth limit of 0 doesn't search at all".to_string(),
                 ));
@@ -49,14 +49,14 @@ impl StartupPhase {
         let num_worker_threads = match self.num_worker_threads.parse::<usize>() {
             Ok(x) => x,
             Err(e) => {
-                return Action::Modal(ModalContents::new(
+                return Action::Modal(Modal::new(
                     "Error parsing num worker threads".to_string(),
                     e.to_string(),
                 ));
             },
         };
         if num_worker_threads == 0 {
-            return Action::Modal(ModalContents::new(
+            return Action::Modal(Modal::new(
                 "Invalid num worker threads".to_string(),
                 "At least 1 worker thread is required".to_string(),
             ));
