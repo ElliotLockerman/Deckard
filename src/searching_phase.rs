@@ -7,7 +7,6 @@ use crate::search::Searcher;
 use std::path::PathBuf;
 use std::io::Read;
 
-
 use eframe::egui;
 
 pub struct SearchingPhase {
@@ -31,7 +30,7 @@ impl SearchingPhase {
         let paths = results.duplicates;
 
         let mut images = vec![];
-        // TODO: do this in a thread (it doesn't seem to be a problem in practice)?
+        // TODO: do this in a thread? (it doesn't seem to be a problem in practice)
         for dups in &paths {
             let mut vec = vec![];
             for path in dups {
@@ -89,7 +88,6 @@ impl Phase for SearchingPhase {
         }
 
         ui.separator();
-
 
         ui.horizontal(|ui| {
             ui.strong(format!("Searching"));
