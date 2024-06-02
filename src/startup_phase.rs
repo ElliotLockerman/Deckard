@@ -19,7 +19,7 @@ impl StartupPhase {
     pub fn new(root: PathBuf) -> StartupPhase {
         StartupPhase {
             root,
-            follow_sym: true,
+            follow_sym: false,
             limit_depth: false,
             max_depth: "".to_string(),
             num_worker_threads: num_cpus::get().to_string(),
