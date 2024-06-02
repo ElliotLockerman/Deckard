@@ -126,19 +126,14 @@ pub fn open_file(path: &Path, open_kind: OpenKind) -> Result<(), String> {
     let mut command = Command::new("open");
     command.arg(path.as_os_str());
     match open_kind {
-        OpenKind::Reveal => { command.arg(std::ffi::OsStr::new("-R")); },
+        OpenKind::Reveal => { command.arg("-R"); },
         OpenKind::Open => (),
     };
-    match command.output() {
-        Ok(output) => {
-            if output.status.success() {
-                Ok(())
-            } else {
-                Err(String::from_utf8_lossy(&output.stderr).to_string())
-            }
-        },
-        Err(e) => {
-            Err(e.to_string())
-        }
+
+    let output = command.output().map_err(|e| e.to_string())?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
 }

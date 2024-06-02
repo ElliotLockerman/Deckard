@@ -49,17 +49,14 @@ impl Image {
     fn load(path: PathBuf) -> Result<Image, String> {
         // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
         let mut buffer = vec![];
-        let mut file = match std::fs::File::open(path.clone()) {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(format!("Error opening {}: {}", path.display(), e.to_string()));
+        let mut file = std::fs::File::open(path.clone()).map_err(|e| {
+            format!("Error opening {}: {}", path.display(), e.to_string())
+        })?;
 
-            }
-        };
-        if let Err(e) = file.read_to_end(&mut buffer) {
-            return Err(format!("Error reading {}: {}", path.display(), e.to_string()));
+        file.read_to_end(&mut buffer).map_err(|e| {
+            format!("Error reading {}: {}", path.display(), e.to_string())
+        })?;
 
-        }
         let dimm = image::load_from_memory(&buffer).ok().map(|img| {
             (img.width(), img.height())
         });
@@ -109,10 +106,9 @@ struct App {
 }
 
 fn default_root() -> PathBuf {
-    match homedir::get_my_home() {
-        Ok(path_opt) => path_opt.unwrap_or(PathBuf::from("/")),
-        Err(_) => PathBuf::from("/"),
-    }
+    homedir::get_my_home()
+        .unwrap_or_else(|_| Some(PathBuf::from("/")))
+        .unwrap_or_else(|| PathBuf::from("/"))
 }
 
 impl App {
@@ -128,17 +124,14 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             let action = self.phase.render(ctx, ui);
-
             match action {
                 Action::None => return,
                 Action::Trans(next) => self.phase = next,
                 Action::Modal(modal) => {
-                    // TODO: what to do about this constraint?
-                    // Hopefully a rule like "only set modal in response to a 
-                    // click" will do the trick, seeing as while you're in a 
-                    // modal you can't click, but it would be better if it was 
-                    // a constraint that can be more gently enforced.
-                    assert!(!self.modal.is_some());
+                    // Shouldn't be possible if Action::Modal is only returned
+                    // respose to a user action (since users can't interact with
+                    // a Phase-controlled widget while a modal is shown).
+                    assert!(!self.modal.is_some(), "only one modal allowed at a time");
                     self.modal = Some(modal);
                 },
             }

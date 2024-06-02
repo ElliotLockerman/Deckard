@@ -29,15 +29,15 @@ impl StartupPhase {
     fn make_searching_phase(&mut self) -> Action {
         let mut max_depth = None;
         if self.limit_depth {
-            match self.max_depth.parse::<usize>() {
-                Ok(x) => max_depth = Some(x),
+            max_depth = match self.max_depth.parse::<usize>() {
+                Ok(x) => Some(x),
                 Err(e) => {
                     return Action::Modal(Modal::new(
                         "Error parsing depth limit".to_string(),
                         e.to_string(),
                     ))
                 },
-            }
+            };
             if max_depth == Some(0usize) {
                 return Action::Modal(Modal::new(
                     "Invalid depth limit".to_string(),

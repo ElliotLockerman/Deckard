@@ -173,21 +173,19 @@ impl Searcher {
     // Panics if not launch_search was never called or hasn't been called since
     // the previous join()
     pub fn is_finished(&self) -> bool {
-        match &self.thread {
-            Some(thread) => thread.is_finished(),
-            None => panic!("search_async() never called"),
-        }
+        self.thread.as_ref()
+            .expect("thread missing (was search_async() called?)")
+            .is_finished()
     }
     
     // Panics if not search_async was never called
     // Panics on thread join errors
     pub fn join(&mut self) -> SearchResults {
-        let res = match self.thread.take() {
-            Some(thread) => thread.join().expect("thread join error"),
-            None => panic!("search_async() never called"),
-        };
+        self.thread.take()
+            .expect("thread missing (was search_async() called?)")
+            .join()
+            .expect("thread join error")
 
-        res
     }
 }
 
