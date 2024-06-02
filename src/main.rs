@@ -2,7 +2,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use std::path::PathBuf;
-use std::thread;
 use std::io::Read;
 
 use egui::load::Bytes;
@@ -19,14 +18,6 @@ mod helpers;
 use helpers::*;
 use search::Searcher;
 
-
-#[derive(PartialEq, Eq)]
-enum Phase {
-    Startup,
-    Running,
-    Output,
-}
-
 struct Image {
     path: PathBuf,
     handle: String,
@@ -35,51 +26,89 @@ struct Image {
     dimm: Option<(u32, u32)>, // Width x height
 }
 
-struct App {
-    phase: Phase,
+type DynPhase = Box<dyn Phase>;
+
+enum Action {
+    None,
+    Trans(DynPhase),
+    Modal(ModalContents),
+}
+
+trait Phase {
+    fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) -> Action;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct StartupPhase {
     root: PathBuf,
     follow_sym: bool,
     limit_depth: bool,
     max_depth: String,
     num_worker_threads: String,
-    thread: Option<std::thread::JoinHandle<search::SearchResults>>,
-    searcher: Option<Searcher>,
-    images: Option<Vec<Vec<Image>>>,
-    errors: Vec<String>,
-    modal: Option<ModalContents>,
 }
 
-fn default_root() -> PathBuf {
-    match homedir::get_my_home() {
-        Ok(path_opt) => path_opt.unwrap_or(PathBuf::from("/")),
-        Err(_) => PathBuf::from("/"),
-    }
-}
-
-impl App {
-    fn new() -> App {
-        App {
-            phase: Phase::Startup,
-            root: default_root(),
+impl StartupPhase {
+    fn new(root: PathBuf) -> StartupPhase {
+        StartupPhase {
+            root,
             follow_sym: true,
             limit_depth: false,
-            max_depth: String::new(),
+            max_depth: "".to_string(),
             num_worker_threads: num_cpus::get().to_string(),
-            searcher: None,
-            thread: None,
-            images: None,
-            errors: vec![],
-            modal: None,
         }
     }
 
-////////////////////////////////////////////////////////////////////////////////
-// Phase Core Functions
-////////////////////////////////////////////////////////////////////////////////
+    fn make_searching_phase(&mut self) -> Action {
+        let mut max_depth = None;
+        if self.limit_depth {
+            match self.max_depth.parse::<usize>() {
+                Ok(x) => max_depth = Some(x),
+                Err(e) => {
+                    return Action::Modal(ModalContents::new(
+                        "Error parsing depth limit".to_string(),
+                        e.to_string(),
+                    ))
+                },
+            }
+            if max_depth == Some(0usize) {
+                return Action::Modal(ModalContents::new(
+                    "Invalid depth limit".to_string(),
+                    "A depth limit of 0 doesn't search at all".to_string(),
+                ));
+            }
+        }
 
-    fn phase_startup(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        assert!(self.searcher.is_none());
+        let num_worker_threads = match self.num_worker_threads.parse::<usize>() {
+            Ok(x) => x,
+            Err(e) => {
+                return Action::Modal(ModalContents::new(
+                    "Error parsing num worker threads".to_string(),
+                    e.to_string(),
+                ));
+            },
+        };
+        if num_worker_threads == 0 {
+            return Action::Modal(ModalContents::new(
+                "Invalid num worker threads".to_string(),
+                "At least 1 worker thread is required".to_string(),
+            ));
+        }
 
+        let mut searcher = Searcher::new(
+            self.root.clone(),
+            self.follow_sym,
+            num_worker_threads,
+            max_depth,
+        );
+        searcher.launch_search();
+        let root = std::mem::replace(&mut self.root, PathBuf::new());
+        Action::Trans(Box::new(SearchingPhase::new(root, searcher)))
+    }
+}
+
+impl Phase for StartupPhase {
+    fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
         ui.horizontal(|ui| {
             ui.strong("Root: ".to_string());
             ui.monospace(format!("{}", self.root.display()));
@@ -110,32 +139,98 @@ impl App {
         ui.separator();
 
         if ui.button("Search").clicked() {
-            self.start_running();
+            return self.make_searching_phase();
+        }
+
+        Action::None
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct SearchingPhase {
+    root: PathBuf,
+    searcher: Searcher,
+}
+
+impl SearchingPhase {
+    fn new(root: PathBuf, searcher: Searcher) -> SearchingPhase {
+        SearchingPhase {
+            root,
+            searcher,
         }
     }
 
-    fn phase_running(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        let searcher = self.searcher.as_ref().expect("searcher missing");
-        if searcher.is_finished() {
-            if self.searcher.as_ref().expect("missing searcher").was_canceled() {
-                self.searcher.take().unwrap().join();
-                self.start_startup();
-            } else {
-                let images = self.load_images();
-                self.start_output(images);
+    fn make_output_phase(&mut self) -> Box<dyn Phase> {
+        assert!(self.searcher.is_finished());
+        let results = self.searcher.join();
+
+        let mut errors = results.errors;
+        let paths = results.duplicates;
+
+        let mut images = vec![];
+        // TODO: do this in a thread (it doesn't seem to be a problem in practice)?
+        for dups in &paths {
+            let mut vec = vec![];
+            for path in dups {
+                // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
+                let mut buffer = vec![];
+                let mut file = match std::fs::File::open(path.clone()) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        errors.push(format!("Error opening {}: {}", path.display(), e.to_string()));
+                        continue;
+                    }
+                };
+                if let Err(e) = file.read_to_end(&mut buffer) {
+                    errors.push(format!("Error reading {}: {}", path.display(), e.to_string()));
+                    continue;
+
+                }
+                let file_size = buffer.len();
+
+                let dimm = image::load_from_memory(&buffer).ok().map(|img| {
+                    (img.width(), img.height())
+                });
+
+                vec.push(Image{
+                    path: path.clone(),
+                    handle: format!("{}", path.display()),
+                    buffer: egui::load::Bytes::from(buffer),
+                    file_size,
+                    dimm,
+                });
             }
-            return;
+            images.push(vec);
+        }
+
+        let root = std::mem::replace(&mut self.root, PathBuf::new());
+        Box::new(OutputPhase::new(root, images, errors))
+    }
+}
+
+impl Phase for SearchingPhase {
+
+    fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
+        if self.searcher.is_finished() {
+            if self.searcher.was_canceled() {
+                self.searcher.join();
+                let root = std::mem::replace(&mut self.root, PathBuf::new());
+                return Action::Trans(Box::new(StartupPhase::new(root)));
+            } else {
+                return Action::Trans(self.make_output_phase());
+            }
         }
 
         if ui.button("<- New Search").clicked() {
-            self.searcher.as_ref().expect("missing searcher").cancel();
+            self.searcher.cancel();
         }
 
         ui.separator();
 
 
         ui.horizontal(|ui| {
-            ui.strong(format!("Running on"));
+            ui.strong(format!("Searching"));
             ui.monospace(format!("{}", self.root.display()));
         });
 
@@ -143,110 +238,32 @@ impl App {
             let spinner = egui::widgets::Spinner::new().size(256.0);
             ui.add(spinner);
         });
+
+        Action::None
     }
-
-    fn phase_output(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        if ui.button("<- New Search").clicked() {
-            self.start_startup();
-            return;
-        }
-
-        ui.separator();
-
-        if let Some(images) = self.images.as_ref() {
-            if !images.is_empty() {
-                self.draw_output_table(ui);
-            } else {
-                ui.label(format!("Done on {}, found no duplicates", self.root.display()));
-            }
-        } else {
-            ui.label(format!("Error, no results found"));
-        }
-    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
-// Phase Transitions
-////////////////////////////////////////////////////////////////////////////////
 
-    fn start_startup(&mut self) {
-        assert!(self.searcher.is_none());
-        assert!(self.modal.is_none());
-        self.errors.clear();
-        self.images = None;
-        self.phase = Phase::Startup;
-    }
+struct OutputPhase {
+    root: PathBuf, // Just so we can go back to startup and keep the entered root
+    images: Vec<Vec<Image>>, // [set of duplicates][duplicate in set]
+    errors: Vec<String>,
+}
 
-    fn start_running(&mut self) {
-        assert!(self.phase == Phase::Startup);
-        assert!(self.searcher.is_none());
-        assert!(self.modal.is_none());
-
-        let mut max_depth = None;
-        if self.limit_depth {
-            match self.max_depth.parse::<usize>() {
-                Ok(x) => max_depth = Some(x),
-                Err(e) => {
-                    self.modal = Some(ModalContents::new(
-                        "Error parsing depth limit".to_string(),
-                        e.to_string(),
-                    ));
-                    return;
-                },
-            }
-            if max_depth == Some(0usize) {
-                self.modal = Some(ModalContents::new(
-                    "Invalid depth limit".to_string(),
-                    "A depth limit of 0 doesn't search at all".to_string(),
-                ));
-                return;
-            }
+impl OutputPhase {
+    fn new(root: PathBuf, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
+        OutputPhase {
+            root,
+            images,
+            errors,
         }
-
-        let num_worker_threads = match self.num_worker_threads.parse::<usize>() {
-            Ok(x) => x,
-            Err(e) => {
-                self.modal = Some(ModalContents::new(
-                    "Error parsing num worker threads".to_string(),
-                    e.to_string(),
-                ));
-                return;
-            },
-        };
-        if num_worker_threads == 0 {
-            self.modal = Some(ModalContents::new(
-                "Invalid num worker threads".to_string(),
-                "At least 1 worker thread is required".to_string(),
-            ));
-            return;
-        }
-
-        let mut searcher = Searcher::new(
-            self.root.clone(),
-            self.follow_sym,
-            num_worker_threads,
-            max_depth,
-        );
-        searcher.launch_search();
-        self.searcher = Some(searcher);
-        self.phase = Phase::Running;
     }
 
-    fn start_output(&mut self, images: Vec<Vec<Image>>) {
-        assert!(self.phase == Phase::Running);
-        assert!(self.searcher.is_none());
-        assert!(self.modal.is_none());
-        self.images = Some(images);
-        self.phase = Phase::Output;
-    }
-
-////////////////////////////////////////////////////////////////////////////////
-// Drawing Helpers
-////////////////////////////////////////////////////////////////////////////////
-
-    fn draw_output_table(&mut self,  ui: &mut egui::Ui) {
-        assert!(self.images.is_some());
+    fn draw_output_table(&mut self,  ui: &mut egui::Ui) -> Option<ModalContents> {
+        let mut modal_contents = None;
         egui::ScrollArea::both().show(ui, |ui| {
-            for (dup_idx, dups) in self.images.as_ref().unwrap().iter().enumerate() {
+            for (dup_idx, dups) in self.images.iter().enumerate() {
                 ui.push_id(dup_idx, |ui| {
                     TableBuilder::new(ui)
                         .column(Column::remainder().resizable(true))
@@ -277,7 +294,7 @@ impl App {
                                         };
 
                                         if let Err(msg) = err {
-                                            self.modal = Some(ModalContents::new(
+                                            modal_contents = Some(ModalContents::new(
                                                 "Error showing file".to_string(),
                                                 msg,
                                             ));
@@ -304,79 +321,86 @@ impl App {
                 }
             }
         });
+        modal_contents
     }
+}
 
-    fn draw_modal(&mut self, ctx: &egui::Context) {
+impl Phase for OutputPhase {
+    fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
+        if ui.button("<- New Search").clicked() {
+            let root = std::mem::replace(&mut self.root, PathBuf::new());
+            return Action::Trans(Box::new(StartupPhase::new(root)));
+        }
+
+        ui.separator();
+
+        let mut modal = None;
+        if !self.images.is_empty() {
+            modal = self.draw_output_table(ui);
+        } else {
+            ui.label(format!("Done on {}, found no duplicates", self.root.display()));
+        }
+        
+        return match modal {
+            Some(x) => Action::Modal(x),
+            None => Action::None,
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct App {
+    phase: Box<dyn Phase>,
+    modal: Option<ModalContents>,
+}
+
+fn default_root() -> PathBuf {
+    match homedir::get_my_home() {
+        Ok(path_opt) => path_opt.unwrap_or(PathBuf::from("/")),
+        Err(_) => PathBuf::from("/"),
+    }
+}
+
+impl App {
+    fn new() -> App {
+        App {
+            phase: Box::new(StartupPhase::new(default_root())),
+            modal: None,
+        }
+    }
+}
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let action = self.phase.render(ctx, ui);
+
+            match action {
+                Action::None => return,
+                Action::Trans(next) => self.phase = next,
+                Action::Modal(modal) => {
+                    // TODO: what to do about this constraint?
+                    // Hopefully a rule like "only set modal in response to a 
+                    // click" will do the trick, seeing as while you're in a 
+                    // modal you can't click, but it would be better if it was 
+                    // a constraint that can be more gently enforced.
+                    assert!(!self.modal.is_some());
+                    self.modal = Some(modal);
+                },
+            }
+        });
+
+
         if let Some(contents) = &self.modal {
             if draw_error_modal(ctx, &contents) {
                 self.modal = None;
             }
         }
     }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
-
-    fn load_images(&mut self) -> Vec<Vec<Image>> {
-        assert!(self.searcher.is_some());
-        assert!(self.searcher.as_ref().unwrap().is_finished());
-        let results = self.searcher.take().unwrap().join();
-
-        self.errors.extend(results.errors);
-        let paths = results.duplicates;
-
-        let mut images = vec![];
-        // TODO: do this in a thread (it doesn't seem to be a problem in practice)?
-        for dups in &paths {
-            let mut vec = vec![];
-            for path in dups {
-                // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
-                let mut buffer = vec![];
-                let mut file = match std::fs::File::open(path.clone()) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        self.errors.push(format!("Error opening {}: {}", path.display(), e.to_string()));
-                        continue;
-                    }
-                };
-                if let Err(e) = file.read_to_end(&mut buffer) {
-                    self.errors.push(format!("Error reading {}: {}", path.display(), e.to_string()));
-                    continue;
-
-                }
-                let file_size = buffer.len();
-
-                let dimm = image::load_from_memory(&buffer).ok().map(|img| {
-                    (img.width(), img.height())
-                });
-
-                vec.push(Image{
-                    path: path.clone(),
-                    handle: format!("{}", path.display()),
-                    buffer: egui::load::Bytes::from(buffer),
-                    file_size,
-                    dimm,
-                });
-            }
-            images.push(vec);
-        }
-        images
-    }
-}
-
-
-impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui_extras::install_image_loaders(ctx);
-        egui::CentralPanel::default().show(ctx, |ui| {
-            match self.phase {
-                Phase::Startup => self.phase_startup(ctx, ui),
-                Phase::Running => self.phase_running(ctx, ui),
-                Phase::Output => self.phase_output(ctx, ui),
-            }
-        });
-        self.draw_modal(ctx);
-    }
-}
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
@@ -387,6 +411,9 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "DupFind",
         options,
-        Box::new(|_cc| Box::new(App::new())),
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Box::new(App::new())
+        }),
     )
 }
