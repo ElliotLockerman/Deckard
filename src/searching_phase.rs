@@ -5,7 +5,6 @@ use crate::output_phase::OutputPhase;
 use crate::search::Searcher;
 
 use std::path::PathBuf;
-use std::io::Read;
 
 use eframe::egui;
 
@@ -31,36 +30,17 @@ impl SearchingPhase {
 
         let mut images = vec![];
         // TODO: do this in a thread? (it doesn't seem to be a problem in practice)
-        for dups in &paths {
+        for dups in paths {
             let mut vec = vec![];
             for path in dups {
-                // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
-                let mut buffer = vec![];
-                let mut file = match std::fs::File::open(path.clone()) {
+                let image = match Image::load(path) {
                     Ok(x) => x,
                     Err(e) => {
-                        errors.push(format!("Error opening {}: {}", path.display(), e.to_string()));
+                        errors.push(e);
                         continue;
-                    }
+                    },
                 };
-                if let Err(e) = file.read_to_end(&mut buffer) {
-                    errors.push(format!("Error reading {}: {}", path.display(), e.to_string()));
-                    continue;
-
-                }
-                let file_size = buffer.len();
-
-                let dimm = image::load_from_memory(&buffer).ok().map(|img| {
-                    (img.width(), img.height())
-                });
-
-                vec.push(Image{
-                    path: path.clone(),
-                    handle: format!("{}", path.display()),
-                    buffer: egui::load::Bytes::from(buffer),
-                    file_size,
-                    dimm,
-                });
+                vec.push(image);
             }
             images.push(vec);
         }
@@ -71,7 +51,6 @@ impl SearchingPhase {
 }
 
 impl Phase for SearchingPhase {
-
     fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
         if self.searcher.is_finished() {
             if self.searcher.was_canceled() {

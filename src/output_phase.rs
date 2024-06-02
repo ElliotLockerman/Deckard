@@ -42,7 +42,7 @@ impl OutputPhase {
                                 let image = &dups[idx];
                                 row.col(|ui| {
                                     ui.label(
-                                        egui::RichText::new(format!("{}", image.path.display()))
+                                        egui::RichText::new(image.path.display().to_string())
                                             .monospace()
                                             .size(13.0)
                                     );
@@ -69,7 +69,7 @@ impl OutputPhase {
                                 });
                                 row.col(|ui| {
                                     ui.add(egui::Image::from_bytes(
-                                            image.handle.clone(),
+                                            image.path.display().to_string(),
                                             image.buffer.clone()
                                         )
                                     );
