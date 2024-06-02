@@ -23,11 +23,9 @@ struct Image {
     dimm: Option<(u32, u32)>, // Width x height
 }
 
-type DynPhase = Box<dyn Phase>;
-
 enum Action {
     None,
-    Trans(DynPhase),
+    Trans(Box<dyn Phase>),
     Modal(Modal),
 }
 
