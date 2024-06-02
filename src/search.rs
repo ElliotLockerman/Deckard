@@ -56,7 +56,7 @@ impl SearcherInner {
                     let image = match image::open(path.clone()) {
                         Ok(x) => x,
                         Err(e) => {
-                            let err = format!("Error opening image {}: {}", path.display(), e);
+                            let err = format!("Error opening image {}: {e}", path.display());
                             errors.lock().expect("error vec lock error").push(err);
                             continue;
                         },
@@ -77,7 +77,7 @@ impl SearcherInner {
             let entry = match entry {
                 Ok(x) => x,
                 Err(e) => {
-                    let err = format!("Error walking directory: {}", e);
+                    let err = format!("Error walking directory: {e}");
                     errors.lock().expect("error vec lock error").push(err);
                     continue;
                 },

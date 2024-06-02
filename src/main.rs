@@ -47,14 +47,15 @@ impl Image {
     }
 
     fn load(path: PathBuf) -> Result<Image, String> {
-        // Manually loading the image and passing it as bytes is the only way I could get it to handle URIs with spaces
+        // Manually loading the image and passing it as bytes is the only way I
+        // could get it to handle URIs with spaces
         let mut buffer = vec![];
         let mut file = std::fs::File::open(path.clone()).map_err(|e| {
-            format!("Error opening {}: {}", path.display(), e.to_string())
+            format!("Error opening {}: {e}", path.display())
         })?;
 
         file.read_to_end(&mut buffer).map_err(|e| {
-            format!("Error reading {}: {}", path.display(), e.to_string())
+            format!("Error reading {}: {e}", path.display())
         })?;
 
         let dimm = image::load_from_memory(&buffer).ok().map(|img| {

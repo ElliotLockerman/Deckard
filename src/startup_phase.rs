@@ -78,7 +78,7 @@ impl Phase for StartupPhase {
     fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
         ui.horizontal(|ui| {
             ui.strong("Root: ".to_string());
-            ui.monospace(format!("{}", self.root.display()));
+            ui.monospace(self.root.display().to_string());
         });
 
         if ui.button("Choose...").clicked() {

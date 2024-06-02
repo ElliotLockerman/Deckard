@@ -69,8 +69,8 @@ impl Phase for SearchingPhase {
         ui.separator();
 
         ui.horizontal(|ui| {
-            ui.strong(format!("Searching"));
-            ui.monospace(format!("{}", self.root.display()));
+            ui.strong("Searching");
+            ui.monospace(self.root.display().to_string());
         });
 
         ui.centered_and_justified(|ui| {
