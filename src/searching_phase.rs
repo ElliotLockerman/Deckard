@@ -64,6 +64,8 @@ impl Phase for SearchingPhase {
 
         if ui.button("<- New Search").clicked() {
             self.searcher.cancel();
+            let root = std::mem::replace(&mut self.root, PathBuf::new());
+            return Action::Trans(Box::new(StartupPhase::new(root)));
         }
 
         ui.separator();
