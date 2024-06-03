@@ -8,6 +8,8 @@ use std::collections::HashSet;
 
 use eframe::egui;
 
+use itertools::Itertools;
+
 // User options
 #[derive(Default)]
 pub struct UserOpts {
@@ -16,7 +18,7 @@ pub struct UserOpts {
     pub limit_depth: bool,
     pub max_depth: String,
     pub num_worker_threads: String,
-    pub exts: HashSet<String>,
+    pub exts: String,
 }
 
 pub struct StartupPhase {
@@ -29,6 +31,7 @@ impl StartupPhase {
             opts: UserOpts {
                 root,
                 num_worker_threads: num_cpus::get().to_string(),
+                exts: SUPPORTED_EXTS.iter().join(","),
                 ..Default::default()
             },
         }
@@ -77,10 +80,29 @@ impl StartupPhase {
         Ok(num_worker_threads)
     }
 
+    fn parse_exts(&self) -> Result<HashSet<String>, Action> {
+        let exts: HashSet<String> = self.opts.exts
+            .split(",")
+            .map(|x| x.trim().to_owned())
+            .filter(|x| x.len() != 0)
+            .collect();
+
+        for ext in &exts {
+            if !SUPPORTED_EXTS.contains(ext.as_str()) {
+                return Err(Action::Modal(Modal::new(
+                    "Extension Error".to_owned(),
+                    format!("Extension {ext} is not supported"),
+                )));
+            }
+        }
+
+        Ok(exts)
+    }
+
     fn make_searching_phase(&mut self) -> Action {
         let max_depth = try_act!(self.parse_max_depth());
         let num_worker_threads = try_act!(self.parse_num_worker_threads());
-        let exts = SUPPORTED_EXTS.iter().map(|x| x.to_string()).collect();
+        let exts = try_act!(self.parse_exts());
 
         let mut searcher = Searcher::new(
             self.opts.root.clone(),
@@ -122,6 +144,13 @@ impl Phase for StartupPhase {
                 ui.label("Num Worker Threads");
                 ui.text_edit_singleline(&mut self.opts.num_worker_threads);
             });
+
+            ui.horizontal(|ui| {
+                ui.label("Extensions");
+                ui.text_edit_singleline(&mut self.opts.exts);
+            });
+
+            ui.label(format!("Supported extenions: {}", SUPPORTED_EXTS.iter().join(",")));
         });
 
         ui.separator();
