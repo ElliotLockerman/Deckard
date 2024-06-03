@@ -36,8 +36,61 @@ impl OutputPhase {
         }
     }
 
+    fn draw_output_row(
+        mut row: egui_extras::TableRow,
+        dups: &Vec<Image>
+        ) -> Option<Modal> {
+
+        let mut modal = None;
+        let idx = row.index(); 
+        let image = &dups[idx];
+        row.col(|ui| {
+
+            ui.add_space(PRE_HEADER_SPACE);
+            ui.label(
+                egui::RichText::new(image.path.display().to_string())
+                .monospace()
+                .size(HEADER_SIZE)
+            );
+            if let Some((width, height)) = image.dimm {
+                ui.label(format!("{width}×{height}"));
+            }
+            ui.label(format_size(image.file_size, DECIMAL));
+            ui.horizontal(|ui| {
+                let err = if ui.button("Open").clicked() {
+                    open_file(image.path.as_path(), OpenKind::Open)
+                } else if ui.button("Show").clicked() {
+                    open_file(image.path.as_path(), OpenKind::Reveal)
+                } else {
+                    Ok(())
+                };
+
+                if let Err(msg) = err {
+                    // It shouldn't be (reasonably) possible to clobber one
+                    // Some modal with another; see comment in draw_output_table().
+                    modal = Some(Modal::new(
+                            "Error showing file".to_string(),
+                            msg,
+                    ));
+                }
+            });
+        });
+        row.col(|ui| {
+            ui.add(egui::Image::from_bytes(
+                    image.path.display().to_string(),
+                    image.buffer.clone()
+            )
+            );
+        });
+
+        modal
+    }
+
+    // Actually draws multiple tables, one per set of duplicates, but it looks
+    // like one big table with multiple sections. Also draws all errors reported
+    // by Searcher.
     fn draw_output_table(&mut self,  ui: &mut egui::Ui) -> Option<Modal> {
-        let mut modal_contents = None;
+        let mut modal = None;
         egui::ScrollArea::both().show(ui, |ui| {
             for (dup_idx, dups) in self.images.iter().enumerate() {
                 ui.push_id(dup_idx, |ui| {
@@ -47,44 +100,15 @@ impl OutputPhase {
                         .vscroll(false)
                         .striped(true)
                         .body(|body| {
-                            body.rows(ROW_HEIGHT, dups.len(), |mut row| {
-                                let idx = row.index(); 
-                                let image = &dups[idx];
-                                row.col(|ui| {
-                                    ui.add_space(PRE_HEADER_SPACE);
-                                    ui.label(
-                                        egui::RichText::new(image.path.display().to_string())
-                                            .monospace()
-                                            .size(HEADER_SIZE)
-                                    );
-                                    if let Some((width, height)) = image.dimm {
-                                        ui.label(format!("{width}×{height}"));
-                                    }
-                                    ui.label(format_size(image.file_size, DECIMAL));
-                                    ui.horizontal(|ui| {
-                                        let err = if ui.button("Open").clicked() {
-                                            open_file(image.path.as_path(), OpenKind::Open)
-                                        } else if ui.button("Show").clicked() {
-                                            open_file(image.path.as_path(), OpenKind::Reveal)
-                                        } else {
-                                            Ok(())
-                                        };
-
-                                        if let Err(msg) = err {
-                                            modal_contents = Some(Modal::new(
-                                                "Error showing file".to_string(),
-                                                msg,
-                                            ));
-                                        }
-                                    });
-                                });
-                                row.col(|ui| {
-                                    ui.add(egui::Image::from_bytes(
-                                            image.path.display().to_string(),
-                                            image.buffer.clone()
-                                        )
-                                    );
-                                });
+                            body.rows(ROW_HEIGHT, dups.len(), |row| {
+                                // It shouldn't be (reasonably) possible to overwite
+                                // one Some modal with another, since a Some is
+                                // only returned in response to a click, and it
+                                // would be nigh-impossible to click twice in a
+                                // single frame.
+                                if let Some(m) = Self::draw_output_row(row, dups) {
+                                    modal = Some(m);
+                                }
                             });
                         });
                 });
@@ -98,7 +122,7 @@ impl OutputPhase {
                 }
             }
         });
-        modal_contents
+        modal
     }
 }
 
