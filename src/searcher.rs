@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::thread;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::thread::JoinHandle;
 
 use walkdir::WalkDir;
@@ -15,6 +15,30 @@ use image_hasher::HasherConfig;
 
 use maplit::hashset;
 
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref SUPPORTED_EXTS: HashSet<&'static str> = hashset!{
+        "jpg",
+        "jpeg",
+        "avif",
+        "avif",
+        "bmp",
+        "dds",
+        "exr",
+        "gif",
+        "hdr",
+        "ico",
+        "png",
+        "pnm",
+        "qoi",
+        "tga",
+        "tif",
+        "tiff",
+        "webp",
+    };
+}
+
 pub struct SearchResults {
     pub duplicates: Vec<Vec<PathBuf>>,
     pub errors: Vec<String>,
@@ -25,6 +49,7 @@ struct SearcherInner {
     follow_sym: bool,
     num_threads: usize,
     max_depth: Option<usize>,
+    exts: HashSet<String>, // Extentions to consider
     cancel: AtomicBool,
 }
 
@@ -72,7 +97,6 @@ impl SearcherInner {
             }));
         }
 
-        let exts = hashset!{"jpg", "jpeg", "avif", "bmp", "dds", "exr", "gif", "hdr", "ico", "png", "pnm", "qoi", "tga", "tiff", "webp"};
         let mut walker = WalkDir::new(self.root.clone()).follow_links(self.follow_sym);
         if let Some(d) = self.max_depth { walker = walker.max_depth(d); }
         for entry in walker {
@@ -89,7 +113,7 @@ impl SearcherInner {
             let path = entry.path();
             if let Some(ext) = path.extension() {
                 let s = ext.to_string_lossy();
-                if !exts.contains(&*s) { continue; }
+                if !self.exts.contains(&*s) { continue; }
                 queue_p.push(Some(path.to_owned())).expect("queue push error");
             }
 
@@ -141,6 +165,7 @@ impl Searcher {
         follow_sym: bool,
         num_threads: usize,
         max_depth: Option<usize>,
+        exts: HashSet<String>
     ) -> Searcher {
         Searcher {
             inner: Arc::new(SearcherInner{
@@ -148,6 +173,7 @@ impl Searcher {
                 follow_sym,
                 num_threads,
                 max_depth,
+                exts,
                 cancel: AtomicBool::new(false),
             }),
             thread: None,

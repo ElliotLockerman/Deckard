@@ -1463,6 +1463,7 @@ dependencies = [
  "humansize",
  "image",
  "image_hasher",
+ "lazy_static",
  "magnetic",
  "maplit",
  "num_cpus",
@@ -2133,6 +2134,12 @@ checksum = "bd85a5776cd9500c2e2059c8c76c3b01528566b7fcbaf8098b55a33fc298849b"
 dependencies = [
  "arrayvec",
 ]
+
+[[package]]
+name = "lazy_static"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "lebe"

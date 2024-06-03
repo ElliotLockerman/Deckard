@@ -20,6 +20,19 @@ enum Action {
     Modal(Modal),
 }
 
+// Like question mark operator, but takes a Result<T, Actor::Modal>, for use in
+// where the error outcome is an Action::Modal, and the good action is any other
+// variant.
+#[macro_export]
+macro_rules! try_act {
+    ($expression:expr) => {
+        match $expression {
+            Ok(x) => x,
+            Err(e) => return e,
+        }
+    }
+}
+
 trait Phase {
     fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) -> Action;
 }

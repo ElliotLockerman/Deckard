@@ -16,4 +16,5 @@ image = {version = "0.24", features = ["avif", "bmp", "dds", "exr", "gif", "hdr"
 image_hasher = "1.2.0"
 humansize = "2.1.3"
 egui-modal = "0.3.6"
+lazy_static = "1.4.0"
 

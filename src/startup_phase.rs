@@ -1,9 +1,10 @@
 
-use crate::{Phase, Action, Modal};
+use crate::{Phase, Action, Modal, try_act};
 use crate::searching_phase::SearchingPhase;
-use crate::searcher::Searcher;
+use crate::searcher::{Searcher, SUPPORTED_EXTS};
 
 use std::path::PathBuf;
+use std::collections::HashSet;
 
 use eframe::egui;
 
@@ -15,6 +16,7 @@ pub struct UserOpts {
     pub limit_depth: bool,
     pub max_depth: String,
     pub num_worker_threads: String,
+    pub exts: HashSet<String>,
 }
 
 pub struct StartupPhase {
@@ -26,10 +28,8 @@ impl StartupPhase {
         StartupPhase {
             opts: UserOpts {
                 root,
-                follow_sym: false,
-                limit_depth: false,
-                max_depth: "".to_string(),
                 num_worker_threads: num_cpus::get().to_string(),
+                ..Default::default()
             },
         }
     }
@@ -38,47 +38,56 @@ impl StartupPhase {
         StartupPhase{opts}
     }
 
-    fn make_searching_phase(&mut self) -> Action {
+    fn parse_max_depth(&self) -> Result<Option<usize>, Action> {
         let mut max_depth = None;
         if self.opts.limit_depth {
-            max_depth = match self.opts.max_depth.parse::<usize>() {
-                Ok(x) => Some(x),
-                Err(e) => {
-                    return Action::Modal(Modal::new(
+            let depth = self.opts.max_depth.parse::<usize>().map_err(|e| {
+                Action::Modal(Modal::new(
                         "Error parsing depth limit".to_string(),
                         e.to_string(),
-                    ))
-                },
-            };
-            if max_depth == Some(0usize) {
-                return Action::Modal(Modal::new(
+                ))
+            })?;
+            if depth == 0usize {
+                return Err(Action::Modal(Modal::new(
                     "Invalid depth limit".to_string(),
                     "A depth limit of 0 doesn't search at all".to_string(),
-                ));
+                )));
             }
+            max_depth = Some(depth);
         }
+        Ok(max_depth)
+    }
 
-        let num_worker_threads = match self.opts.num_worker_threads.parse::<usize>() {
-            Ok(x) => x,
-            Err(e) => {
-                return Action::Modal(Modal::new(
+    fn parse_num_worker_threads(&self) -> Result<usize, Action> {
+        let num_worker_threads = self.opts.num_worker_threads.parse::<usize>()
+            .map_err(|e| {
+                Action::Modal(Modal::new(
                     "Error parsing num worker threads".to_string(),
                     e.to_string(),
-                ));
-            },
-        };
+                ))
+            })?;
+
         if num_worker_threads == 0 {
-            return Action::Modal(Modal::new(
+            return Err(Action::Modal(Modal::new(
                 "Invalid num worker threads".to_string(),
                 "At least 1 worker thread is required".to_string(),
-            ));
+            )));
         }
+
+        Ok(num_worker_threads)
+    }
+
+    fn make_searching_phase(&mut self) -> Action {
+        let max_depth = try_act!(self.parse_max_depth());
+        let num_worker_threads = try_act!(self.parse_num_worker_threads());
+        let exts = SUPPORTED_EXTS.iter().map(|x| x.to_string()).collect();
 
         let mut searcher = Searcher::new(
             self.opts.root.clone(),
             self.opts.follow_sym,
             num_worker_threads,
             max_depth,
+            exts,
         );
         searcher.launch_search();
         let opts = std::mem::take(&mut self.opts);
