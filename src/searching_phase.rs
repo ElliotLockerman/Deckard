@@ -8,6 +8,9 @@ use std::path::PathBuf;
 
 use eframe::egui;
 
+// Eyeballed, seems good for a reasonable variety of window sizes
+const SPINNER_SIZE: f32 = 256.0;
+
 pub struct SearchingPhase {
     root: PathBuf,
     searcher: Searcher,
@@ -76,7 +79,7 @@ impl Phase for SearchingPhase {
         });
 
         ui.centered_and_justified(|ui| {
-            let spinner = egui::widgets::Spinner::new().size(256.0);
+            let spinner = egui::widgets::Spinner::new().size(SPINNER_SIZE);
             ui.add(spinner);
         });
 

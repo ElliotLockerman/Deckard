@@ -11,6 +11,13 @@ use egui_extras::{TableBuilder, Column};
 
 use humansize::{format_size, DECIMAL};
 
+// For sizes much smaller than 100, the second column (of images) don't end up
+// aligned across tables.
+const ROW_HEIGHT: f32 = 100.0;
+
+// Eyballed
+const HEADER_SIZE: f32 = 13.0;
+
 pub struct OutputPhase {
     root: PathBuf, // Just so we can go back to startup and keep the entered root
     images: Vec<Vec<Image>>, // [set of duplicates][duplicate in set]
@@ -37,14 +44,14 @@ impl OutputPhase {
                         .vscroll(false)
                         .striped(true)
                         .body(|body| {
-                            body.rows(100.0, dups.len(), |mut row| {
+                            body.rows(ROW_HEIGHT, dups.len(), |mut row| {
                                 let idx = row.index(); 
                                 let image = &dups[idx];
                                 row.col(|ui| {
                                     ui.label(
                                         egui::RichText::new(image.path.display().to_string())
                                             .monospace()
-                                            .size(13.0)
+                                            .size(HEADER_SIZE)
                                     );
                                     if let Some((width, height)) = image.dimm {
                                         ui.label(format!("{width}×{height}"));
