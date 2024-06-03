@@ -37,7 +37,7 @@ impl OutputPhase {
 
     fn draw_output_row(
         mut row: egui_extras::TableRow,
-        dups: &Vec<Image>
+        dups: &[Image]
         ) -> Option<Modal> {
 
         let mut modal = None;
@@ -128,7 +128,7 @@ impl OutputPhase {
 impl Phase for OutputPhase {
     fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
         if ui.button("<- New Search").clicked() {
-            let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+            let opts = std::mem::take(&mut self.opts);
             return Action::Trans(Box::new(StartupPhase::with_opts(opts)));
         }
 
@@ -141,7 +141,7 @@ impl Phase for OutputPhase {
             ui.label(format!("Done on {}, found no duplicates", self.opts.root.display()));
         }
         
-        return match modal {
+        match modal {
             Some(x) => Action::Modal(x),
             None => Action::None,
         }

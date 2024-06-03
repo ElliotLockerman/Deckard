@@ -81,7 +81,7 @@ impl StartupPhase {
             max_depth,
         );
         searcher.launch_search();
-        let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+        let opts = std::mem::take(&mut self.opts);
         Action::Trans(Box::new(SearchingPhase::new(opts, searcher)))
     }
 }

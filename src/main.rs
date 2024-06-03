@@ -13,7 +13,6 @@ use std::io::Read;
 
 use egui::load::Bytes;
 use eframe::egui;
-use egui_modal;
 
 enum Action {
     None,
@@ -126,13 +125,13 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             let action = self.phase.render(ctx, ui);
             match action {
-                Action::None => return,
+                Action::None => (),
                 Action::Trans(next) => self.phase = next,
                 Action::Modal(modal) => {
                     // Shouldn't be possible if Action::Modal is only returned
                     // respose to a user action (since users can't interact with
                     // a Phase-controlled widget while a modal is shown).
-                    assert!(!self.modal.is_some(), "only one modal allowed at a time");
+                    assert!(self.modal.is_none(), "only one modal allowed at a time");
                     self.modal = Some(modal);
                 },
             }

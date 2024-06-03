@@ -46,7 +46,7 @@ impl SearchingPhase {
             images.push(vec);
         }
 
-        let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+        let opts = std::mem::take(&mut self.opts);
         Box::new(OutputPhase::new(opts, images, errors))
     }
 }
@@ -56,7 +56,7 @@ impl Phase for SearchingPhase {
         if self.searcher.is_finished() {
             if self.searcher.was_canceled() {
                 self.searcher.join();
-                let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+                let opts = std::mem::take(&mut self.opts);
                 return Action::Trans(Box::new(StartupPhase::with_opts(opts)));
             } else {
                 return Action::Trans(self.make_output_phase());
@@ -65,7 +65,7 @@ impl Phase for SearchingPhase {
 
         if ui.button("<- New Search").clicked() {
             self.searcher.cancel();
-            let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+            let opts = std::mem::take(&mut self.opts);
             return Action::Trans(Box::new(StartupPhase::with_opts(opts)));
         }
 
