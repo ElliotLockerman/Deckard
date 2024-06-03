@@ -17,7 +17,7 @@ const ROW_HEIGHT: f32 = 100.0;
 // Eyeballed
 const PRE_HEADER_SPACE: f32 = 5.0;
 
-// Eyballed
+// Eyeballed
 const HEADER_SIZE: f32 = 13.0;
 
 pub struct OutputPhase {
@@ -78,8 +78,7 @@ impl OutputPhase {
             ui.add(egui::Image::from_bytes(
                     image.path.display().to_string(),
                     image.buffer.clone()
-            )
-            );
+            ));
         });
 
         modal
