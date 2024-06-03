@@ -1,8 +1,7 @@
 
 use crate::{Phase, Action, Image, Modal};
-use crate::startup_phase::StartupPhase;
+use crate::startup_phase::{StartupPhase, UserOpts};
 
-use std::path::PathBuf;
 use std::path::Path;
 use std::process::Command;
 
@@ -22,15 +21,15 @@ const PRE_HEADER_SPACE: f32 = 5.0;
 const HEADER_SIZE: f32 = 13.0;
 
 pub struct OutputPhase {
-    root: PathBuf, // Just so we can go back to startup and keep the entered root
+    opts: UserOpts,
     images: Vec<Vec<Image>>, // [set of duplicates][duplicate in set]
     errors: Vec<String>,
 }
 
 impl OutputPhase {
-    pub fn new(root: PathBuf, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
+    pub fn new(opts: UserOpts, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
         OutputPhase {
-            root,
+            opts,
             images,
             errors,
         }
@@ -129,8 +128,8 @@ impl OutputPhase {
 impl Phase for OutputPhase {
     fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
         if ui.button("<- New Search").clicked() {
-            let root = std::mem::replace(&mut self.root, PathBuf::new());
-            return Action::Trans(Box::new(StartupPhase::new(root)));
+            let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+            return Action::Trans(Box::new(StartupPhase::with_opts(opts)));
         }
 
         ui.separator();
@@ -139,7 +138,7 @@ impl Phase for OutputPhase {
         if !self.images.is_empty() {
             modal = self.draw_output_table(ui);
         } else {
-            ui.label(format!("Done on {}, found no duplicates", self.root.display()));
+            ui.label(format!("Done on {}, found no duplicates", self.opts.root.display()));
         }
         
         return match modal {

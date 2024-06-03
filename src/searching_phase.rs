@@ -1,10 +1,8 @@
 
 use crate::{Phase, Action, Image};
-use crate::startup_phase::StartupPhase;
+use crate::startup_phase::{StartupPhase, UserOpts};
 use crate::output_phase::OutputPhase;
 use crate::searcher::Searcher;
-
-use std::path::PathBuf;
 
 use eframe::egui;
 
@@ -12,14 +10,14 @@ use eframe::egui;
 const SPINNER_SIZE: f32 = 256.0;
 
 pub struct SearchingPhase {
-    root: PathBuf,
+    opts: UserOpts,
     searcher: Searcher,
 }
 
 impl SearchingPhase {
-    pub fn new(root: PathBuf, searcher: Searcher) -> SearchingPhase {
+    pub fn new(opts: UserOpts, searcher: Searcher) -> SearchingPhase {
         SearchingPhase {
-            root,
+            opts,
             searcher,
         }
     }
@@ -48,8 +46,8 @@ impl SearchingPhase {
             images.push(vec);
         }
 
-        let root = std::mem::replace(&mut self.root, PathBuf::new());
-        Box::new(OutputPhase::new(root, images, errors))
+        let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+        Box::new(OutputPhase::new(opts, images, errors))
     }
 }
 
@@ -58,8 +56,8 @@ impl Phase for SearchingPhase {
         if self.searcher.is_finished() {
             if self.searcher.was_canceled() {
                 self.searcher.join();
-                let root = std::mem::replace(&mut self.root, PathBuf::new());
-                return Action::Trans(Box::new(StartupPhase::new(root)));
+                let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+                return Action::Trans(Box::new(StartupPhase::with_opts(opts)));
             } else {
                 return Action::Trans(self.make_output_phase());
             }
@@ -67,15 +65,15 @@ impl Phase for SearchingPhase {
 
         if ui.button("<- New Search").clicked() {
             self.searcher.cancel();
-            let root = std::mem::replace(&mut self.root, PathBuf::new());
-            return Action::Trans(Box::new(StartupPhase::new(root)));
+            let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+            return Action::Trans(Box::new(StartupPhase::with_opts(opts)));
         }
 
         ui.separator();
 
         ui.horizontal(|ui| {
             ui.strong("Searching");
-            ui.monospace(self.root.display().to_string());
+            ui.monospace(self.opts.root.display().to_string());
         });
 
         ui.centered_and_justified(|ui| {

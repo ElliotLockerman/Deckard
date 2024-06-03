@@ -7,29 +7,41 @@ use std::path::PathBuf;
 
 use eframe::egui;
 
+// User options
+#[derive(Default)]
+pub struct UserOpts {
+    pub root: PathBuf,
+    pub follow_sym: bool,
+    pub limit_depth: bool,
+    pub max_depth: String,
+    pub num_worker_threads: String,
+}
+
 pub struct StartupPhase {
-    root: PathBuf,
-    follow_sym: bool,
-    limit_depth: bool,
-    max_depth: String,
-    num_worker_threads: String,
+    opts: UserOpts,
 }
 
 impl StartupPhase {
     pub fn new(root: PathBuf) -> StartupPhase {
         StartupPhase {
-            root,
-            follow_sym: false,
-            limit_depth: false,
-            max_depth: "".to_string(),
-            num_worker_threads: num_cpus::get().to_string(),
+            opts: UserOpts {
+                root,
+                follow_sym: false,
+                limit_depth: false,
+                max_depth: "".to_string(),
+                num_worker_threads: num_cpus::get().to_string(),
+            },
         }
+    }
+
+    pub fn with_opts(opts: UserOpts) -> StartupPhase {
+        StartupPhase{opts}
     }
 
     fn make_searching_phase(&mut self) -> Action {
         let mut max_depth = None;
-        if self.limit_depth {
-            max_depth = match self.max_depth.parse::<usize>() {
+        if self.opts.limit_depth {
+            max_depth = match self.opts.max_depth.parse::<usize>() {
                 Ok(x) => Some(x),
                 Err(e) => {
                     return Action::Modal(Modal::new(
@@ -46,7 +58,7 @@ impl StartupPhase {
             }
         }
 
-        let num_worker_threads = match self.num_worker_threads.parse::<usize>() {
+        let num_worker_threads = match self.opts.num_worker_threads.parse::<usize>() {
             Ok(x) => x,
             Err(e) => {
                 return Action::Modal(Modal::new(
@@ -63,14 +75,14 @@ impl StartupPhase {
         }
 
         let mut searcher = Searcher::new(
-            self.root.clone(),
-            self.follow_sym,
+            self.opts.root.clone(),
+            self.opts.follow_sym,
             num_worker_threads,
             max_depth,
         );
         searcher.launch_search();
-        let root = std::mem::replace(&mut self.root, PathBuf::new());
-        Action::Trans(Box::new(SearchingPhase::new(root, searcher)))
+        let opts = std::mem::replace(&mut self.opts, UserOpts::default());
+        Action::Trans(Box::new(SearchingPhase::new(opts, searcher)))
     }
 }
 
@@ -78,28 +90,28 @@ impl Phase for StartupPhase {
     fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
         ui.horizontal(|ui| {
             ui.strong("Root: ".to_string());
-            ui.monospace(self.root.display().to_string());
+            ui.monospace(self.opts.root.display().to_string());
         });
 
         if ui.button("Choose...").clicked() {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                self.root = path;
+                self.opts.root = path;
             }
         }
 
         ui.separator();
 
         ui.collapsing("Advanced", |ui| {
-            ui.checkbox(&mut self.follow_sym, "Follow Symlinks");
+            ui.checkbox(&mut self.opts.follow_sym, "Follow Symlinks");
             ui.horizontal(|ui| {
-                ui.checkbox(&mut self.limit_depth, "Depth Limit");
-                let depth_field = egui::TextEdit::singleline(&mut self.max_depth);
-                ui.add_enabled(self.limit_depth, depth_field);
+                ui.checkbox(&mut self.opts.limit_depth, "Depth Limit");
+                let depth_field = egui::TextEdit::singleline(&mut self.opts.max_depth);
+                ui.add_enabled(self.opts.limit_depth, depth_field);
             });
 
             ui.horizontal(|ui| {
                 ui.label("Num Worker Threads");
-                ui.text_edit_singleline(&mut self.num_worker_threads);
+                ui.text_edit_singleline(&mut self.opts.num_worker_threads);
             });
         });
 
