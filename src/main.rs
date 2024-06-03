@@ -4,7 +4,7 @@
 mod startup_phase;
 mod searching_phase;
 mod output_phase;
-mod search;
+mod searcher;
 
 use startup_phase::StartupPhase;
 

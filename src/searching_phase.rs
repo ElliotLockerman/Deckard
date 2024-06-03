@@ -2,7 +2,7 @@
 use crate::{Phase, Action, Image};
 use crate::startup_phase::StartupPhase;
 use crate::output_phase::OutputPhase;
-use crate::search::Searcher;
+use crate::searcher::Searcher;
 
 use std::path::PathBuf;
 

@@ -30,26 +30,28 @@ struct SearcherInner {
 
 impl SearcherInner {
     fn search(&self) -> SearchResults {
-        let (p1, c1) = spmc_queue::<
-                Option<std::path::PathBuf>,
-                DynamicBuffer<Option<std::path::PathBuf>>
-            >(DynamicBuffer::new(32).expect("Error allocationg spmc buffer"));
-
-        let c1 = Arc::new(c1);
+        // The size is somewhat arbitrary, but its expected to take longer to
+        // process each unit of work than to produce it, so having twice as large
+        // a buffer as there are worker threads should ensure the workers always
+        // have work waiting.
+        let work_buf = DynamicBuffer::new(2 * self.num_threads)
+            .expect("Error allocationg spmc buffer");
+        let (queue_p, queue_c) = spmc_queue::<Option<std::path::PathBuf>, _>(work_buf);
+        let queue_c = Arc::new(queue_c);
 
         let map = Arc::new(Mutex::new(HashMap::new()));
         let errors = Arc::new(Mutex::new(vec![]));
 
         let mut threads = Vec::new();
         for _ in 1..=self.num_threads {
-            let c1 = c1.clone();
+            let queue_c = queue_c.clone();
             let map = map.clone();
             let errors = errors.clone();
 
             threads.push(thread::spawn(move || {
                 let hasher = HasherConfig::new().to_hasher();
                 loop {
-                    let path = match c1.pop().expect("queue pop error") {
+                    let path = match queue_c.pop().expect("queue pop error") {
                         Some(x) => x,
                         None => return, // We're done!
                     };
@@ -88,7 +90,7 @@ impl SearcherInner {
             if let Some(ext) = path.extension() {
                 let s = ext.to_string_lossy();
                 if !exts.contains(&*s) { continue; }
-                p1.push(Some(path.to_owned())).expect("queue push error");
+                queue_p.push(Some(path.to_owned())).expect("queue push error");
             }
 
             if self.cancel.load(Ordering::Relaxed) {
@@ -97,7 +99,7 @@ impl SearcherInner {
         }
 
         for _ in 1..=threads.len() {
-            p1.push(None).expect("queue push error");
+            queue_p.push(None).expect("queue push error");
         }
 
         for t in threads {

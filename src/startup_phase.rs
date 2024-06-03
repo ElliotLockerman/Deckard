@@ -1,7 +1,7 @@
 
 use crate::{Phase, Action, Modal};
 use crate::searching_phase::SearchingPhase;
-use crate::search::Searcher;
+use crate::searcher::Searcher;
 
 use std::path::PathBuf;
 
