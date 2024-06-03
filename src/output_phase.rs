@@ -15,6 +15,9 @@ use humansize::{format_size, DECIMAL};
 // aligned across tables.
 const ROW_HEIGHT: f32 = 100.0;
 
+// Eyeballed
+const PRE_HEADER_SPACE: f32 = 5.0;
+
 // Eyballed
 const HEADER_SIZE: f32 = 13.0;
 
@@ -48,6 +51,7 @@ impl OutputPhase {
                                 let idx = row.index(); 
                                 let image = &dups[idx];
                                 row.col(|ui| {
+                                    ui.add_space(PRE_HEADER_SPACE);
                                     ui.label(
                                         egui::RichText::new(image.path.display().to_string())
                                             .monospace()
