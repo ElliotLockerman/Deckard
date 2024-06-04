@@ -49,7 +49,7 @@ impl Modal {
     }
 
     // Blocks until "Ok" is clicked.
-    fn draw(&self, _ctx: &egui::Context) {
+    fn draw(&self) {
         rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
             .set_title(self.title.clone())
@@ -63,7 +63,6 @@ impl Modal {
 
 struct App {
     phase: Box<dyn Phase>,
-    modal: Option<Modal>,
 }
 
 fn default_root() -> PathBuf {
@@ -76,7 +75,6 @@ impl App {
     fn new() -> App {
         App {
             phase: Box::new(StartupPhase::new(default_root())),
-            modal: None,
         }
     }
 }
@@ -92,17 +90,10 @@ impl eframe::App for App {
                     // Shouldn't be possible if Action::Modal is only returned
                     // respose to a user action (since users can't interact with
                     // a Phase-controlled widget while a modal is shown).
-                    assert!(self.modal.is_none(), "only one modal allowed at a time");
-                    self.modal = Some(modal);
+                    modal.draw();
                 },
             }
         });
-
-
-        if let Some(modal) = &self.modal {
-            modal.draw(ctx);
-            self.modal = None;
-        }
     }
 }
 
