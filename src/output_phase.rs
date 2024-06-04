@@ -2,9 +2,6 @@
 use crate::{Phase, Action, Image, Modal};
 use crate::startup_phase::{StartupPhase, UserOpts};
 
-use std::path::Path;
-use std::process::Command;
-
 use eframe::egui;
 use egui_extras::{TableBuilder, Column};
 
@@ -59,19 +56,19 @@ impl OutputPhase {
             ui.label(format_size(image.file_size, DECIMAL));
             ui.horizontal(|ui| {
                 let err = if ui.button("Open").clicked() {
-                    open_file(image.path.as_path(), OpenKind::Open)
+                    opener::open(&image.path)
                 } else if ui.button("Show").clicked() {
-                    open_file(image.path.as_path(), OpenKind::Reveal)
+                    opener::reveal(&image.path)
                 } else {
                     Ok(())
                 };
 
-                if let Err(msg) = err {
+                if let Err(e) = err {
                     // It shouldn't be (reasonably) possible to clobber one
                     // Some modal with another; see comment in draw_output_table().
                     modal = Err(Modal::new(
                             "Error showing file".to_string(),
-                            msg,
+                            e.to_string(),
                     ));
                 }
 
@@ -168,26 +165,3 @@ impl Phase for OutputPhase {
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-
-pub enum OpenKind {
-    Open,
-    Reveal,
-}
-
-// TODO: support platforms other than mac
-pub fn open_file(path: &Path, open_kind: OpenKind) -> Result<(), String> {
-    let mut command = Command::new("open");
-    command.arg(path.as_os_str());
-    match open_kind {
-        OpenKind::Reveal => { command.arg("-R"); },
-        OpenKind::Open => (),
-    };
-
-    let output = command.output().map_err(|e| e.to_string())?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
-}
