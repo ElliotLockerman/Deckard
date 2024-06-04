@@ -36,6 +36,7 @@ impl OutputPhase {
     }
 
     fn draw_output_row(
+        &self,
         mut row: egui_extras::TableRow,
         dups: &[Image]
         ) -> Result<(), Modal> {
@@ -44,10 +45,11 @@ impl OutputPhase {
         let idx = row.index(); 
         let image = &dups[idx];
         row.col(|ui| {
+            let stripped = image.path.strip_prefix(&self.opts.root).unwrap_or(&image.path);
 
             ui.add_space(PRE_HEADER_SPACE);
             ui.label(
-                egui::RichText::new(image.path.display().to_string())
+                egui::RichText::new(stripped.display().to_string())
                 .monospace()
                 .size(HEADER_SIZE)
             );
@@ -104,7 +106,7 @@ impl OutputPhase {
                                 // only returned in response to a click, and it
                                 // would be nigh-impossible to click twice in a
                                 // single frame.
-                                if let Err(m) = Self::draw_output_row(row, dups) {
+                                if let Err(m) = self.draw_output_row(row, dups) {
                                     modal = Err(m);
                                 }
                             });
@@ -126,9 +128,25 @@ impl OutputPhase {
 
 impl Phase for OutputPhase {
     fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
-        if ui.button("<- New Search").clicked() {
-            let opts = std::mem::take(&mut self.opts);
-            return Action::Trans(Box::new(StartupPhase::with_opts(opts)));
+        let resp = ui.horizontal(|ui| {
+            if ui.button("<- New Search").clicked() {
+                let opts = std::mem::take(&mut self.opts);
+                return Some(Action::Trans(Box::new(StartupPhase::with_opts(opts))));
+            }
+
+            ui.horizontal(|ui| {
+                ui.label("Results for");
+                ui.label(
+                    egui::RichText::new(self.opts.root.display().to_string())
+                    .monospace()
+                );
+            });
+
+            None
+        });
+
+        if let Some(action) = resp.inner {
+            return action;
         }
 
         ui.separator();

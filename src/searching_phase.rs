@@ -63,18 +63,26 @@ impl Phase for SearchingPhase {
             }
         }
 
-        if ui.button("<- New Search").clicked() {
-            self.searcher.cancel();
-            let opts = std::mem::take(&mut self.opts);
-            return Action::Trans(Box::new(StartupPhase::with_opts(opts)));
+        let resp = ui.horizontal(|ui| {
+            if ui.button("<- New Search").clicked() {
+                self.searcher.cancel();
+                let opts = std::mem::take(&mut self.opts);
+                return Some(Action::Trans(Box::new(StartupPhase::with_opts(opts))));
+            }
+
+            ui.horizontal(|ui| {
+                ui.strong("Searching");
+                ui.monospace(self.opts.root.display().to_string());
+            });
+
+            None
+        });
+
+        if let Some(action) = resp.inner {
+            return action;
         }
 
         ui.separator();
-
-        ui.horizontal(|ui| {
-            ui.strong("Searching");
-            ui.monospace(self.opts.root.display().to_string());
-        });
 
         ui.centered_and_justified(|ui| {
             let spinner = egui::widgets::Spinner::new().size(SPINNER_SIZE);
