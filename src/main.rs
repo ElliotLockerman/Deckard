@@ -90,24 +90,14 @@ impl Modal {
         Modal{title, body}
     }
 
-    // Returns true if closed
-    fn draw(&self, ctx: &egui::Context) -> bool {
-        let modal = egui_modal::Modal::new(ctx, "error_modal");
-        let mut close_clicked = false;
-        modal.show(|ui| {
-            modal.title(ui, &self.title);
-            modal.frame(ui, |ui| {
-                modal.body(ui, &self.body);
-            });
-            modal.buttons(ui, |ui| {
-                if modal.button(ui, "Close").clicked() {
-                    close_clicked = true;
-                }
-            });
-        });
-        modal.open();
-
-        close_clicked
+    // Blocks until "Ok" is clicked.
+    fn draw(&self, _ctx: &egui::Context) {
+        rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title(self.title.clone())
+            .set_description(self.body.clone())
+            .set_buttons(rfd::MessageButtons::Ok)
+            .show();
     }
 }
 
@@ -152,9 +142,8 @@ impl eframe::App for App {
 
 
         if let Some(modal) = &self.modal {
-            if modal.draw(ctx) {
-                self.modal = None;
-            }
+            modal.draw(ctx);
+            self.modal = None;
         }
     }
 }
