@@ -74,6 +74,12 @@ impl OutputPhase {
                             msg,
                     ));
                 }
+
+                if ui.button("Copy path").clicked() {
+                    ui.output_mut(|out| 
+                        out.copied_text = image.path.as_os_str().to_string_lossy().to_string()
+                    );
+                }
             });
         });
         row.col(|ui| {
