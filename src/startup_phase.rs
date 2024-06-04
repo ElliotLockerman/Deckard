@@ -41,46 +41,46 @@ impl StartupPhase {
         StartupPhase{opts}
     }
 
-    fn parse_max_depth(&self) -> Result<Option<usize>, Action> {
+    fn parse_max_depth(&self) -> Result<Option<usize>, Modal> {
         let mut max_depth = None;
         if self.opts.limit_depth {
             let depth = self.opts.max_depth.parse::<usize>().map_err(|e| {
-                Action::Modal(Modal::new(
-                        "Error parsing depth limit".to_string(),
-                        e.to_string(),
-                ))
+                Modal::new(
+                    "Error parsing depth limit".to_string(),
+                    e.to_string(),
+                )
             })?;
             if depth == 0usize {
-                return Err(Action::Modal(Modal::new(
+                return Err(Modal::new(
                     "Invalid depth limit".to_string(),
                     "A depth limit of 0 doesn't search at all".to_string(),
-                )));
+                ));
             }
             max_depth = Some(depth);
         }
         Ok(max_depth)
     }
 
-    fn parse_num_worker_threads(&self) -> Result<usize, Action> {
+    fn parse_num_worker_threads(&self) -> Result<usize, Modal> {
         let num_worker_threads = self.opts.num_worker_threads.parse::<usize>()
             .map_err(|e| {
-                Action::Modal(Modal::new(
+                Modal::new(
                     "Error parsing num worker threads".to_string(),
                     e.to_string(),
-                ))
+                )
             })?;
 
         if num_worker_threads == 0 {
-            return Err(Action::Modal(Modal::new(
+            return Err(Modal::new(
                 "Invalid num worker threads".to_string(),
                 "At least 1 worker thread is required".to_string(),
-            )));
+            ));
         }
 
         Ok(num_worker_threads)
     }
 
-    fn parse_exts(&self) -> Result<HashSet<String>, Action> {
+    fn parse_exts(&self) -> Result<HashSet<String>, Modal> {
         let exts: HashSet<String> = self.opts.exts
             .split(",")
             .map(|x| x.trim().to_owned())
@@ -89,10 +89,10 @@ impl StartupPhase {
 
         for ext in &exts {
             if !SUPPORTED_EXTS.contains(ext.as_str()) {
-                return Err(Action::Modal(Modal::new(
+                return Err(Modal::new(
                     "Extension Error".to_owned(),
                     format!("Extension {ext} is not supported"),
-                )));
+                ));
             }
         }
 

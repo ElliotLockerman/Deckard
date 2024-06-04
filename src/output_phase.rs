@@ -38,9 +38,9 @@ impl OutputPhase {
     fn draw_output_row(
         mut row: egui_extras::TableRow,
         dups: &[Image]
-        ) -> Option<Modal> {
+        ) -> Result<(), Modal> {
 
-        let mut modal = None;
+        let mut modal = Ok(());
         let idx = row.index(); 
         let image = &dups[idx];
         row.col(|ui| {
@@ -67,7 +67,7 @@ impl OutputPhase {
                 if let Err(msg) = err {
                     // It shouldn't be (reasonably) possible to clobber one
                     // Some modal with another; see comment in draw_output_table().
-                    modal = Some(Modal::new(
+                    modal = Err(Modal::new(
                             "Error showing file".to_string(),
                             msg,
                     ));
@@ -87,8 +87,8 @@ impl OutputPhase {
     // Actually draws multiple tables, one per set of duplicates, but it looks
     // like one big table with multiple sections. Also draws all errors reported
     // by Searcher.
-    fn draw_output_table(&mut self,  ui: &mut egui::Ui) -> Option<Modal> {
-        let mut modal = None;
+    fn draw_output_table(&mut self,  ui: &mut egui::Ui) -> Result<(), Modal> {
+        let mut modal = Ok(());
         egui::ScrollArea::both().show(ui, |ui| {
             for (dup_idx, dups) in self.images.iter().enumerate() {
                 ui.push_id(dup_idx, |ui| {
@@ -104,8 +104,8 @@ impl OutputPhase {
                                 // only returned in response to a click, and it
                                 // would be nigh-impossible to click twice in a
                                 // single frame.
-                                if let Some(m) = Self::draw_output_row(row, dups) {
-                                    modal = Some(m);
+                                if let Err(m) = Self::draw_output_row(row, dups) {
+                                    modal = Err(m);
                                 }
                             });
                         });
@@ -133,16 +133,13 @@ impl Phase for OutputPhase {
 
         ui.separator();
 
-        let mut modal = None;
-        if !self.images.is_empty() {
-            modal = self.draw_output_table(ui);
-        } else {
+        if self.images.is_empty() {
             ui.label(format!("Done on {}, found no duplicates", self.opts.root.display()));
         }
-        
-        match modal {
-            Some(x) => Action::Modal(x),
-            None => Action::None,
+
+        match self.draw_output_table(ui) {
+            Ok(()) => Action::None,
+            Err(modal) => Action::Modal(modal),
         }
     }
 }

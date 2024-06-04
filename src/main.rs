@@ -20,15 +20,15 @@ enum Action {
     Modal(Modal),
 }
 
-// Like question mark operator, but takes a Result<T, Actor::Modal>, for use in
-// where the error outcome is an Action::Modal, and the good action is any other
-// variant.
+// Like question mark operator, but takes a Result<T, Modal>, and on error,
+// returns an Action::Modal(). For use in functions where the error outcome is 
+// an Action::Modal, and the good action is any other Action variant.
 #[macro_export]
 macro_rules! try_act {
     ($expression:expr) => {
         match $expression {
             Ok(x) => x,
-            Err(e) => return e,
+            Err(e) => return Action::Modal(e),
         }
     }
 }
