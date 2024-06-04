@@ -1,8 +1,9 @@
 
-use crate::{Phase, Action, Image};
+use crate::{Phase, Action};
 use crate::startup_phase::{StartupPhase, UserOpts};
 use crate::output_phase::OutputPhase;
 use crate::searcher::Searcher;
+use crate::misc::Image;
 
 use eframe::egui;
 

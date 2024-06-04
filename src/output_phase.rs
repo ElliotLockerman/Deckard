@@ -1,6 +1,7 @@
 
-use crate::{Phase, Action, Image, Modal};
+use crate::{Phase, Action, Modal};
 use crate::startup_phase::{StartupPhase, UserOpts};
+use crate::misc::Image;
 
 use eframe::egui;
 use egui_extras::{TableBuilder, Column};

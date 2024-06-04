@@ -5,13 +5,12 @@ mod startup_phase;
 mod searching_phase;
 mod output_phase;
 mod searcher;
+mod misc;
 
 use startup_phase::StartupPhase;
 
 use std::path::PathBuf;
-use std::io::Read;
 
-use egui::load::Bytes;
 use eframe::egui;
 
 enum Action {
@@ -36,47 +35,6 @@ macro_rules! try_act {
 trait Phase {
     fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) -> Action;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////
-
-struct Image {
-    path: PathBuf,
-    buffer: Bytes,
-    file_size: usize, // In bytes
-    dimm: Option<(u32, u32)>, // Width x height
-}
-
-impl Image {
-    fn new(path: PathBuf, buffer: Vec<u8>, dimm: Option<(u32, u32)>) -> Image {
-        let file_size = buffer.len();
-        Image{
-            path,
-            buffer: egui::load::Bytes::from(buffer),
-            file_size,
-            dimm,
-        }
-    }
-
-    fn load(path: PathBuf) -> Result<Image, String> {
-        // Manually loading the image and passing it as bytes is the only way I
-        // could get it to handle URIs with spaces
-        let mut buffer = vec![];
-        let mut file = std::fs::File::open(path.clone()).map_err(|e| {
-            format!("Error opening {}: {e}", path.display())
-        })?;
-
-        file.read_to_end(&mut buffer).map_err(|e| {
-            format!("Error reading {}: {e}", path.display())
-        })?;
-
-        let dimm = image::load_from_memory(&buffer).ok().map(|img| {
-            (img.width(), img.height())
-        });
-        Ok(Image::new(path.clone(), buffer, dimm))
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////
 
