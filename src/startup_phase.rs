@@ -116,6 +116,13 @@ impl StartupPhase {
     }
 
     fn make_searching_phase(&mut self) -> Action {
+        if !self.opts.root.exists() {
+            return Action::Modal(Modal::new(
+                    "Path Error".into(),
+                    format!("{} doesn't exist", self.opts.root.display()),
+            ));
+        }
+
         let max_depth = try_act!(self.parse_max_depth());
         let num_worker_threads = try_act!(self.parse_num_worker_threads());
         let exts = try_act!(self.parse_exts());
@@ -136,8 +143,13 @@ impl StartupPhase {
 impl Phase for StartupPhase {
     fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
         ui.horizontal(|ui| {
-            ui.strong("Root: ".to_string());
-            ui.monospace(self.opts.root.display().to_string());
+            ui.strong("Root Path: ".to_string());
+
+            let mut buf = self.opts.root.to_string_lossy();
+            let output = egui::TextEdit::singleline(&mut buf).code_editor().show(ui);
+            if output.response.changed() {
+                self.opts.root = buf.to_string().into();
+            }
         });
 
         if ui.button("Choose...").clicked() {
