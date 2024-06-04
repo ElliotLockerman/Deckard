@@ -135,7 +135,7 @@ impl Phase for OutputPhase {
         let resp = ui.horizontal(|ui| {
             if ui.button("<- New Search").clicked() {
                 let opts = std::mem::take(&mut self.opts);
-                return Some(Action::Trans(Box::new(StartupPhase::with_opts(opts))));
+                return Some(Action::Trans(Box::new(StartupPhase::new_with_opts(opts))));
             }
 
             ui.horizontal(|ui| {

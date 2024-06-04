@@ -26,7 +26,17 @@ pub struct StartupPhase {
 }
 
 impl StartupPhase {
-    pub fn new(root: PathBuf) -> StartupPhase {
+    const ROOT_KEY: &'static str = "STARTUPPHASE_ROOT";
+
+    pub fn new_with_cc(cc: &eframe::CreationContext) -> StartupPhase {
+        let root = match cc.storage {
+            Some(storage) => match storage.get_string(Self::ROOT_KEY) {
+                Some(path) => path.into() ,
+                None =>  Self::default_root(),
+            },
+            None => Self::default_root(),
+        };
+
         StartupPhase {
             opts: UserOpts {
                 root,
@@ -37,8 +47,14 @@ impl StartupPhase {
         }
     }
 
-    pub fn with_opts(opts: UserOpts) -> StartupPhase {
+    pub fn new_with_opts(opts: UserOpts) -> StartupPhase {
         StartupPhase{opts}
+    }
+
+    fn default_root() -> PathBuf {
+        homedir::get_my_home()
+            .unwrap_or_else(|_| Some(PathBuf::from("/")))
+            .unwrap_or_else(|| PathBuf::from("/"))
     }
 
     fn parse_max_depth(&self) -> Result<Option<usize>, Modal> {
@@ -125,7 +141,9 @@ impl Phase for StartupPhase {
         });
 
         if ui.button("Choose...").clicked() {
-            if let Some(path) = rfd::FileDialog::new().pick_folder() {
+            if let Some(path) = rfd::FileDialog::new()
+                .set_directory(&self.opts.root)
+                .pick_folder() {
                 self.opts.root = path;
             }
         }
@@ -160,6 +178,10 @@ impl Phase for StartupPhase {
         }
 
         Action::None
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string(Self::ROOT_KEY, self.opts.root.to_string_lossy().into());
     }
 }
 

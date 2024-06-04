@@ -9,8 +9,6 @@ mod misc;
 
 use startup_phase::StartupPhase;
 
-use std::path::PathBuf;
-
 use eframe::egui;
 
 enum Action {
@@ -34,6 +32,7 @@ macro_rules! try_act {
 
 trait Phase {
     fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) -> Action;
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -65,16 +64,10 @@ struct App {
     phase: Box<dyn Phase>,
 }
 
-fn default_root() -> PathBuf {
-    homedir::get_my_home()
-        .unwrap_or_else(|_| Some(PathBuf::from("/")))
-        .unwrap_or_else(|| PathBuf::from("/"))
-}
-
 impl App {
-    fn new() -> App {
+    fn new(cc: &eframe::CreationContext) -> App {
         App {
-            phase: Box::new(StartupPhase::new(default_root())),
+            phase: Box::new(StartupPhase::new_with_cc(cc)),
         }
     }
 }
@@ -95,6 +88,10 @@ impl eframe::App for App {
             }
         });
     }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.phase.save(storage);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -109,7 +106,7 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Box::new(App::new())
+            Box::new(App::new(cc))
         }),
     )
 }

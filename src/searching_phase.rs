@@ -58,7 +58,7 @@ impl Phase for SearchingPhase {
             if self.searcher.was_canceled() {
                 self.searcher.join();
                 let opts = std::mem::take(&mut self.opts);
-                return Action::Trans(Box::new(StartupPhase::with_opts(opts)));
+                return Action::Trans(Box::new(StartupPhase::new_with_opts(opts)));
             } else {
                 return Action::Trans(self.make_output_phase());
             }
@@ -68,7 +68,7 @@ impl Phase for SearchingPhase {
             if ui.button("<- New Search").clicked() {
                 self.searcher.cancel();
                 let opts = std::mem::take(&mut self.opts);
-                return Some(Action::Trans(Box::new(StartupPhase::with_opts(opts))));
+                return Some(Action::Trans(Box::new(StartupPhase::new_with_opts(opts))));
             }
 
             ui.horizontal(|ui| {
