@@ -36,7 +36,7 @@ impl OutputPhase {
         &self,
         ui: &mut egui::Ui,
         image: &Image
-        ) -> Result<(), Modal> {
+    ) -> Result<(), Modal> {
 
         ui.add(egui::Image::from_bytes(
                 image.path.display().to_string(),

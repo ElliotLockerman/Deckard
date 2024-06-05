@@ -98,9 +98,9 @@ impl StartupPhase {
 
     fn parse_exts(&self) -> Result<HashSet<String>, Modal> {
         let exts: HashSet<String> = self.opts.exts
-            .split(",")
+            .split(',')
             .map(|x| x.trim().to_owned())
-            .filter(|x| x.len() != 0)
+            .filter(|x| !x.is_empty())
             .collect();
 
         for ext in &exts {
