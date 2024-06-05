@@ -27,6 +27,7 @@ pub struct StartupPhase {
 
 impl StartupPhase {
     const ROOT_KEY: &'static str = "STARTUPPHASE_ROOT";
+    const NUM_WORKER_THREADS_WIDTH: f32 = 30.0;
 
     pub fn new_with_cc(cc: &eframe::CreationContext) -> StartupPhase {
         let root = match cc.storage {
@@ -150,35 +151,34 @@ impl Phase for StartupPhase {
             if output.response.changed() {
                 self.opts.root = buf.to_string().into();
             }
-        });
 
-        if ui.button("Choose...").clicked() {
-            if let Some(path) = rfd::FileDialog::new()
-                .set_directory(&self.opts.root)
-                .pick_folder() {
-                self.opts.root = path;
+            if ui.button("Choose...").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_directory(&self.opts.root)
+                    .pick_folder() {
+                    self.opts.root = path;
+                }
             }
-        }
+        });
 
         ui.separator();
 
-        let mut edited = false;
         ui.collapsing("Advanced", |ui| {
-            egui::Grid::new(0).show(ui, |ui| {
-                ui.label("Follow Symlinks");
+            egui::Grid::new(0).num_columns(2).show(ui, |ui| {
+                ui.label("Follow Symlinks:");
                 ui.checkbox(&mut self.opts.follow_sym, "");
                 ui.end_row();
 
                 ui.label("Num Worker Threads:");
-                ui.text_edit_singleline(&mut self.opts.num_worker_threads);
+                let textedit = TextEdit::singleline(&mut self.opts.num_worker_threads)
+                    .desired_width(Self::NUM_WORKER_THREADS_WIDTH);
+                ui.add(textedit);
                 ui.end_row();
 
                 ui.label("Extensions:");
-                let textedit = TextEdit::multiline(&mut self.opts.exts).desired_rows(2);
-                if textedit.show(ui).response.changed() {
-                    // Prevent an enter in the text field from starting search.
-                    edited = true;
-                }
+                let textedit = TextEdit::singleline(&mut self.opts.exts)
+                    .desired_width(f32::INFINITY);
+                ui.add(textedit);
                 ui.end_row();
 
                 ui.label("Supported Extensions:");
@@ -190,11 +190,8 @@ impl Phase for StartupPhase {
 
         ui.separator();
 
-        if ui.button("Search").clicked() {
-            return self.make_searching_phase();
-        }
-
-        if !edited && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        if ui.button("Search").clicked() 
+            || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             return self.make_searching_phase();
         }
 

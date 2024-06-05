@@ -157,11 +157,8 @@ impl Phase for OutputPhase {
                 return Some(Action::Trans(Box::new(StartupPhase::new_with_opts(opts))));
             }
 
-            ui.label("Results for");
-            ui.label(
-                egui::RichText::new(self.opts.root.display().to_string())
-                .monospace()
-            );
+            ui.strong("Results for");
+            ui.monospace(self.opts.root.display().to_string());
 
             None
         });
