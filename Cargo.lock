@@ -1066,6 +1066,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "deckard"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_extras",
+ "homedir",
+ "humansize",
+ "image",
+ "image_hasher",
+ "itertools 0.13.0",
+ "lazy_static",
+ "magnetic",
+ "maplit",
+ "num_cpus",
+ "opener",
+ "rfd",
+ "walkdir",
+]
+
+[[package]]
 name = "derivative"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1492,26 +1512,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f9bfee30e4dedf0ab8b422f03af778d9612b63f502710fc500a334ebe2de645"
 dependencies = [
  "simd-adler32",
-]
-
-[[package]]
-name = "find-dup-gui"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "egui_extras",
- "homedir",
- "humansize",
- "image",
- "image_hasher",
- "itertools 0.13.0",
- "lazy_static",
- "magnetic",
- "maplit",
- "num_cpus",
- "opener",
- "rfd",
- "walkdir",
 ]
 
 [[package]]

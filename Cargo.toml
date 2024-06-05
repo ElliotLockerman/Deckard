@@ -1,5 +1,5 @@
 [package]
-name = "find-dup-gui"
+name = "deckard"
 version = "0.1.0"
 edition = "2021"
 
