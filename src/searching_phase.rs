@@ -6,15 +6,16 @@ use crate::searcher::Searcher;
 
 use eframe::egui;
 
-// Eyeballed, seems good for a reasonable variety of window sizes
-const SPINNER_SIZE: f32 = 256.0;
-
 pub struct SearchingPhase {
     opts: UserOpts,
     searcher: Searcher,
 }
 
 impl SearchingPhase {
+
+    // Eyeballed, seems good for a reasonable variety of window sizes
+    const SPINNER_SIZE: f32 = 256.0;
+
     pub fn new(opts: UserOpts, searcher: Searcher) -> SearchingPhase {
         SearchingPhase {
             opts,
@@ -66,7 +67,7 @@ impl Phase for SearchingPhase {
         ui.separator();
 
         ui.centered_and_justified(|ui| {
-            let spinner = egui::widgets::Spinner::new().size(SPINNER_SIZE);
+            let spinner = egui::widgets::Spinner::new().size(Self::SPINNER_SIZE);
             ui.add(spinner);
         });
 
