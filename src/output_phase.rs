@@ -18,6 +18,9 @@ impl OutputPhase {
 
     // Eyeballed
     const HEADER_SIZE: f32 = 13.0;
+    const MIN_CELL_SIZE: f32 = 150.0;
+    const H_SPACING: f32 = 20.0;
+    const CELL_2_TOP_SPACING: f32 = 10.0;
 
     pub fn new(opts: UserOpts, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
         OutputPhase {
@@ -33,9 +36,16 @@ impl OutputPhase {
         image: &Image
         ) -> Result<(), Modal> {
 
+        ui.add(egui::Image::from_bytes(
+                image.path.display().to_string(),
+                image.buffer.clone()
+        ));
+
         let mut modal = Ok(());
         ui.vertical(|ui| {
             let stripped = image.path.strip_prefix(&self.opts.root).unwrap_or(&image.path);
+
+            ui.add_space(Self::CELL_2_TOP_SPACING);
 
             ui.label(
                 egui::RichText::new(stripped.display().to_string())
@@ -71,12 +81,6 @@ impl OutputPhase {
                 }
             });
         });
-        ui.vertical_centered_justified(|ui| {
-            ui.add(egui::Image::from_bytes(
-                    image.path.display().to_string(),
-                    image.buffer.clone()
-            ));
-        });
 
         modal
     }
@@ -90,6 +94,9 @@ impl OutputPhase {
             for (dup_idx, dups) in self.images.iter().enumerate() {
                 egui::Grid::new(dup_idx)
                     .striped(true)
+                    .min_col_width(Self::MIN_CELL_SIZE)
+                    .min_row_height(Self::MIN_CELL_SIZE)
+                    .spacing((Self::H_SPACING, ui.spacing().item_spacing.y))
                     .num_columns(2)
                     .show(ui, |ui| {
 
