@@ -162,25 +162,24 @@ impl Phase for StartupPhase {
         ui.separator();
 
         ui.collapsing("Advanced", |ui| {
-            ui.checkbox(&mut self.opts.follow_sym, "Follow Symlinks");
-            ui.horizontal(|ui| {
-                ui.label("Depth Limit:");
-                let depth_field = egui::TextEdit::singleline(&mut self.opts.max_depth)
-                    .hint_text("Leave empty for unlimited");
-                ui.add(depth_field);
-            });
+            egui::Grid::new(0).show(ui, |ui| {
+                ui.label("Follow Symlinks");
+                ui.checkbox(&mut self.opts.follow_sym, "");
+                ui.end_row();
 
-            ui.horizontal(|ui| {
                 ui.label("Num Worker Threads:");
                 ui.text_edit_singleline(&mut self.opts.num_worker_threads);
-            });
+                ui.end_row();
 
-            ui.horizontal(|ui| {
                 ui.label("Extensions:");
                 ui.text_edit_multiline(&mut self.opts.exts);
-            });
+                ui.end_row();
 
-            ui.label(format!("Supported extenions: {}", SUPPORTED_EXTS.iter().join(",")));
+                ui.label("Supported Extensions:");
+                ui.label(SUPPORTED_EXTS.iter().join(","));
+                ui.end_row();
+
+            });
         });
 
         ui.separator();
