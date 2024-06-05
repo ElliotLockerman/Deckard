@@ -10,6 +10,7 @@ use humansize::{format_size, DECIMAL};
 
 pub struct OutputPhase {
     opts: UserOpts,
+    first_update: bool,
     images: Vec<Vec<Image>>, // [set of duplicates][duplicate in set]
     errors: Vec<String>,
 }
@@ -25,6 +26,7 @@ impl OutputPhase {
     pub fn new(opts: UserOpts, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
         OutputPhase {
             opts,
+            first_update: true,
             images,
             errors,
         }
@@ -90,7 +92,17 @@ impl OutputPhase {
     // by Searcher.
     fn draw_output_table(&mut self,  ui: &mut egui::Ui) -> Result<(), Modal> {
         let mut modal = Ok(());
-        egui::ScrollArea::vertical().show(ui, |ui| {
+
+        let mut scroll = egui::ScrollArea::vertical().drag_to_scroll(false);
+
+        // Scroll offset is persistent, and I can't find a way to opt-out for
+        // a single widget. This overrides it manually.
+        if self.first_update {
+            self.first_update = false;
+            scroll = scroll.vertical_scroll_offset(0.0);
+        }
+
+        scroll.show(ui, |ui| {
             for (dup_idx, dups) in self.images.iter().enumerate() {
                 egui::Grid::new(dup_idx)
                     .striped(true)
