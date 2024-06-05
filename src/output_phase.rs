@@ -10,7 +10,7 @@ use humansize::{format_size, DECIMAL};
 
 pub struct OutputPhase {
     opts: UserOpts,
-    first_update: bool,
+    update_count: std::num::Saturating<usize>,
     images: Vec<Vec<Image>>, // [set of duplicates][duplicate in set]
     errors: Vec<String>,
 }
@@ -26,7 +26,7 @@ impl OutputPhase {
     pub fn new(opts: UserOpts, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
         OutputPhase {
             opts,
-            first_update: true,
+            update_count: std::num::Saturating(0usize),
             images,
             errors,
         }
@@ -35,22 +35,27 @@ impl OutputPhase {
     fn draw_output_row(
         &self,
         ui: &mut egui::Ui,
+        row: usize,
         image: &Image
     ) -> Result<(), Modal> {
 
         let mut modal = Ok(());
 
-        let resp = ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
-                image.path.display().to_string(),
-                image.buffer.clone()
-        )));
+        // Space out showing the images instead of blocking untill they're all
+        // ready (they're slow to show for the first time).
+        if self.update_count.0 >= row {
+            let resp = ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
+                    image.path.display().to_string(),
+                    image.buffer.clone()
+            )));
 
-        if resp.clicked() {
-            if let Err(e) = opener::open(&image.path) {
-                modal = Err(Modal::new(
-                        "Error showing file".to_string(),
-                        e.to_string(),
-                ));
+            if resp.clicked() {
+                if let Err(e) = opener::open(&image.path) {
+                    modal = Err(Modal::new(
+                            "Error showing file".to_string(),
+                            e.to_string(),
+                    ));
+                }
             }
         }
 
@@ -107,8 +112,7 @@ impl OutputPhase {
 
         // Scroll offset is persistent, and I can't find a way to opt-out for
         // a single widget. This overrides it manually.
-        if self.first_update {
-            self.first_update = false;
+        if self.update_count.0 == 0 {
             scroll = scroll.vertical_scroll_offset(0.0);
         }
 
@@ -123,7 +127,7 @@ impl OutputPhase {
                     .show(ui, |ui| {
 
                     for image in dups {
-                        if let Err(m) = self.draw_output_row(ui, image) {
+                        if let Err(m) = self.draw_output_row(ui, dup_idx, image) {
                             modal = Err(m);
                         }
                         ui.end_row();
@@ -170,10 +174,14 @@ impl Phase for OutputPhase {
             ui.label(format!("Done on {}, found no duplicates", self.opts.root.display()));
         }
 
-        match self.draw_output_table(ui) {
+        let action = match self.draw_output_table(ui) {
             Ok(()) => Action::None,
             Err(modal) => Action::Modal(modal),
-        }
+        };
+
+        self.update_count += 1;
+
+        action
     }
 }
 
