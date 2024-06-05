@@ -11,6 +11,8 @@ use startup_phase::StartupPhase;
 
 use eframe::egui;
 
+const MIN_INNER_SIZE: (f32, f32) = (600.0, 400.0);
+
 enum Action {
     None,
     Trans(Box<dyn Phase>),
@@ -65,6 +67,7 @@ struct App {
 }
 
 impl App {
+
     fn new(cc: &eframe::CreationContext) -> App {
         App {
             phase: Box::new(StartupPhase::new_with_cc(cc)),
@@ -98,7 +101,8 @@ impl eframe::App for App {
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default(),
+        viewport: egui::ViewportBuilder::default()
+            .with_min_inner_size(MIN_INNER_SIZE),
         ..Default::default()
     };
     eframe::run_native(
