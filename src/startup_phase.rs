@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::collections::HashSet;
 
 use eframe::egui;
+use egui::widgets::text_edit::TextEdit;
 
 use itertools::Itertools;
 
@@ -161,6 +162,7 @@ impl Phase for StartupPhase {
 
         ui.separator();
 
+        let mut edited = false;
         ui.collapsing("Advanced", |ui| {
             egui::Grid::new(0).show(ui, |ui| {
                 ui.label("Follow Symlinks");
@@ -172,7 +174,11 @@ impl Phase for StartupPhase {
                 ui.end_row();
 
                 ui.label("Extensions:");
-                ui.text_edit_multiline(&mut self.opts.exts);
+                let textedit = TextEdit::multiline(&mut self.opts.exts).desired_rows(2);
+                if textedit.show(ui).response.changed() {
+                    // Prevent an enter in the text field from starting search.
+                    edited = true;
+                }
                 ui.end_row();
 
                 ui.label("Supported Extensions:");
@@ -185,6 +191,10 @@ impl Phase for StartupPhase {
         ui.separator();
 
         if ui.button("Search").clicked() {
+            return self.make_searching_phase();
+        }
+
+        if !edited && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             return self.make_searching_phase();
         }
 
