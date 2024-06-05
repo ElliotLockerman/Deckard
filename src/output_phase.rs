@@ -38,12 +38,22 @@ impl OutputPhase {
         image: &Image
     ) -> Result<(), Modal> {
 
-        ui.add(egui::Image::from_bytes(
+        let mut modal = Ok(());
+
+        let resp = ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
                 image.path.display().to_string(),
                 image.buffer.clone()
-        ));
+        )));
 
-        let mut modal = Ok(());
+        if resp.clicked() {
+            if let Err(e) = opener::open(&image.path) {
+                modal = Err(Modal::new(
+                        "Error showing file".to_string(),
+                        e.to_string(),
+                ));
+            }
+        }
+
         ui.vertical(|ui| {
             let stripped = image.path.strip_prefix(&self.opts.root).unwrap_or(&image.path);
 
@@ -141,13 +151,11 @@ impl Phase for OutputPhase {
                 return Some(Action::Trans(Box::new(StartupPhase::new_with_opts(opts))));
             }
 
-            ui.horizontal(|ui| {
-                ui.label("Results for");
-                ui.label(
-                    egui::RichText::new(self.opts.root.display().to_string())
-                    .monospace()
-                );
-            });
+            ui.label("Results for");
+            ui.label(
+                egui::RichText::new(self.opts.root.display().to_string())
+                .monospace()
+            );
 
             None
         });
