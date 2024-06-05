@@ -44,12 +44,14 @@ impl OutputPhase {
         // Space out showing the images instead of blocking untill they're all
         // ready (they're slow to show for the first time).
         if self.update_count.0 >= row {
-            let resp = ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
-                    image.path.display().to_string(),
-                    image.buffer.clone()
-            )));
+            let resp = ui.centered_and_justified(|ui| {
+                ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
+                        image.path.display().to_string(),
+                        image.buffer.clone()
+                )))
+            });
 
-            if resp.clicked() {
+            if resp.inner.clicked() {
                 if let Err(e) = opener::open(&image.path) {
                     modal = Err(Modal::new(
                             "Error showing file".to_string(),
