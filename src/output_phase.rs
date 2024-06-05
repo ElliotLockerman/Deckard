@@ -4,19 +4,9 @@ use crate::startup_phase::{StartupPhase, UserOpts};
 use crate::misc::Image;
 
 use eframe::egui;
-use egui_extras::{TableBuilder, Column};
 
 use humansize::{format_size, DECIMAL};
 
-// For sizes much smaller than 100, the second column (of images) don't end up
-// aligned across tables.
-const ROW_HEIGHT: f32 = 100.0;
-
-// Eyeballed
-const PRE_HEADER_SPACE: f32 = 5.0;
-
-// Eyeballed
-const HEADER_SIZE: f32 = 13.0;
 
 pub struct OutputPhase {
     opts: UserOpts,
@@ -25,6 +15,10 @@ pub struct OutputPhase {
 }
 
 impl OutputPhase {
+
+    // Eyeballed
+    const HEADER_SIZE: f32 = 13.0;
+
     pub fn new(opts: UserOpts, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
         OutputPhase {
             opts,
@@ -35,21 +29,18 @@ impl OutputPhase {
 
     fn draw_output_row(
         &self,
-        mut row: egui_extras::TableRow,
-        dups: &[Image]
+        ui: &mut egui::Ui,
+        image: &Image
         ) -> Result<(), Modal> {
 
         let mut modal = Ok(());
-        let idx = row.index(); 
-        let image = &dups[idx];
-        row.col(|ui| {
+        ui.vertical(|ui| {
             let stripped = image.path.strip_prefix(&self.opts.root).unwrap_or(&image.path);
 
-            ui.add_space(PRE_HEADER_SPACE);
             ui.label(
                 egui::RichText::new(stripped.display().to_string())
                 .monospace()
-                .size(HEADER_SIZE)
+                .size(Self::HEADER_SIZE)
             );
             if let Some((width, height)) = image.dimm {
                 ui.label(format!("{width}×{height}"));
@@ -80,7 +71,7 @@ impl OutputPhase {
                 }
             });
         });
-        row.col(|ui| {
+        ui.vertical_centered_justified(|ui| {
             ui.add(egui::Image::from_bytes(
                     image.path.display().to_string(),
                     image.buffer.clone()
@@ -95,26 +86,19 @@ impl OutputPhase {
     // by Searcher.
     fn draw_output_table(&mut self,  ui: &mut egui::Ui) -> Result<(), Modal> {
         let mut modal = Ok(());
-        egui::ScrollArea::both().show(ui, |ui| {
+        egui::ScrollArea::vertical().show(ui, |ui| {
             for (dup_idx, dups) in self.images.iter().enumerate() {
-                ui.push_id(dup_idx, |ui| {
-                    TableBuilder::new(ui)
-                        .column(Column::remainder().resizable(true))
-                        .column(Column::auto().resizable(true))
-                        .vscroll(false)
-                        .striped(true)
-                        .body(|body| {
-                            body.rows(ROW_HEIGHT, dups.len(), |row| {
-                                // It shouldn't be (reasonably) possible to overwite
-                                // one Some modal with another, since a Some is
-                                // only returned in response to a click, and it
-                                // would be nigh-impossible to click twice in a
-                                // single frame.
-                                if let Err(m) = self.draw_output_row(row, dups) {
-                                    modal = Err(m);
-                                }
-                            });
-                        });
+                egui::Grid::new(dup_idx)
+                    .striped(true)
+                    .num_columns(2)
+                    .show(ui, |ui| {
+
+                    for image in dups {
+                        if let Err(m) = self.draw_output_row(ui, image) {
+                            modal = Err(m);
+                        }
+                        ui.end_row();
+                    }
                 });
                 ui.separator();
             }
