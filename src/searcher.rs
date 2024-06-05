@@ -1,3 +1,5 @@
+use crate::misc::Image;
+
 use std::path::PathBuf;
 use std::thread;
 use std::sync::{Arc, Mutex};
@@ -40,8 +42,17 @@ lazy_static! {
 }
 
 pub struct SearchResults {
-    pub duplicates: Vec<Vec<PathBuf>>,
+    pub duplicates: Vec<Vec<Image>>,
     pub errors: Vec<String>,
+}
+
+impl SearchResults {
+    fn empty() -> SearchResults {
+        SearchResults {
+            duplicates: vec![],
+            errors: vec![],
+        }
+    }
 }
 
 struct SearcherInner {
@@ -131,20 +142,34 @@ impl SearcherInner {
         }
 
         if self.cancel.load(Ordering::Relaxed) {
-            return SearchResults {
-                duplicates: vec![],
-                errors: vec![],
-            };
+            return SearchResults::empty();
         }
+
+        let mut errors = Arc::into_inner(errors).expect("arc into_inner error")
+            .into_inner().expect("mutex into_inner error");
 
         let map = Arc::into_inner(map).expect("arc into_inner error")
             .into_inner().expect("mutex into_inner");
-        let duplicates = map.into_iter()
-            .filter_map(|(_, x)| if x.len() > 1 { Some(x) } else { None })
-            .collect();
 
-        let errors = Arc::into_inner(errors).expect("arc into_inner error")
-            .into_inner().expect("mutex into_inner error");
+        let mut duplicates = vec![];
+        for (_, dups) in map.into_iter() {
+            if dups.len() <= 1 {
+                continue;
+            }
+
+            let mut v = vec![];
+            for path in dups {
+                match Image::load(path) {
+                    Ok(x) => v.push(x),
+                    Err(e) => errors.push(e),
+                };
+
+                if self.cancel.load(Ordering::Relaxed) {
+                    return SearchResults::empty();
+                }
+            }
+            duplicates.push(v);
+        }
 
         SearchResults {
             duplicates,

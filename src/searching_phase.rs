@@ -3,7 +3,6 @@ use crate::{Phase, Action};
 use crate::startup_phase::{StartupPhase, UserOpts};
 use crate::output_phase::OutputPhase;
 use crate::searcher::Searcher;
-use crate::misc::Image;
 
 use eframe::egui;
 
@@ -26,29 +25,8 @@ impl SearchingPhase {
     fn make_output_phase(&mut self) -> Box<dyn Phase> {
         assert!(self.searcher.is_finished());
         let results = self.searcher.join();
-
-        let mut errors = results.errors;
-        let paths = results.duplicates;
-
-        let mut images = vec![];
-        // TODO: do this in a thread? (it doesn't seem to be a problem in practice)
-        for dups in paths {
-            let mut vec = vec![];
-            for path in dups {
-                let image = match Image::load(path) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        errors.push(e);
-                        continue;
-                    },
-                };
-                vec.push(image);
-            }
-            images.push(vec);
-        }
-
         let opts = std::mem::take(&mut self.opts);
-        Box::new(OutputPhase::new(opts, images, errors))
+        Box::new(OutputPhase::new(opts, results.duplicates, results.errors))
     }
 }
 
