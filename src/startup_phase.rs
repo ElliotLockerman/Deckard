@@ -15,7 +15,6 @@ use itertools::Itertools;
 pub struct UserOpts {
     pub root: PathBuf,
     pub follow_sym: bool,
-    pub limit_depth: bool,
     pub max_depth: String,
     pub num_worker_threads: String,
     pub exts: String,
@@ -59,7 +58,7 @@ impl StartupPhase {
 
     fn parse_max_depth(&self) -> Result<Option<usize>, Modal> {
         let mut max_depth = None;
-        if self.opts.limit_depth {
+        if !self.opts.max_depth.is_empty() {
             let depth = self.opts.max_depth.parse::<usize>().map_err(|e| {
                 Modal::new(
                     "Error parsing depth limit".to_string(),
@@ -165,19 +164,20 @@ impl Phase for StartupPhase {
         ui.collapsing("Advanced", |ui| {
             ui.checkbox(&mut self.opts.follow_sym, "Follow Symlinks");
             ui.horizontal(|ui| {
-                ui.checkbox(&mut self.opts.limit_depth, "Depth Limit");
-                let depth_field = egui::TextEdit::singleline(&mut self.opts.max_depth);
-                ui.add_enabled(self.opts.limit_depth, depth_field);
+                ui.label("Depth Limit:");
+                let depth_field = egui::TextEdit::singleline(&mut self.opts.max_depth)
+                    .hint_text("Leave empty for unlimited");
+                ui.add(depth_field);
             });
 
             ui.horizontal(|ui| {
-                ui.label("Num Worker Threads");
+                ui.label("Num Worker Threads:");
                 ui.text_edit_singleline(&mut self.opts.num_worker_threads);
             });
 
             ui.horizontal(|ui| {
-                ui.label("Extensions");
-                ui.text_edit_singleline(&mut self.opts.exts);
+                ui.label("Extensions:");
+                ui.text_edit_multiline(&mut self.opts.exts);
             });
 
             ui.label(format!("Supported extenions: {}", SUPPORTED_EXTS.iter().join(",")));
