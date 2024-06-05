@@ -65,7 +65,9 @@ impl Phase for SearchingPhase {
         }
 
         let resp = ui.horizontal(|ui| {
-            if ui.button("<- New Search").clicked() {
+            if ui.button("<- New Search").clicked() 
+                || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+
                 self.searcher.cancel();
                 let opts = std::mem::take(&mut self.opts);
                 return Some(Action::Trans(Box::new(StartupPhase::new_with_opts(opts))));
