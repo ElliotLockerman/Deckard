@@ -21,7 +21,9 @@ impl OutputPhase {
     const HEADER_SIZE: f32 = 13.0;
     const MIN_CELL_SIZE: f32 = 150.0;
     const H_SPACING: f32 = 20.0;
-    const CELL_2_TOP_SPACING: f32 = 10.0;
+    const CELL_2_TOP_SPACING: f32 = 15.0;
+    const CELL_2_BOTTOM_SPACING: f32 = 15.0;
+    const CELL_2_DATA_SPACING: f32 = 3.0;
 
     pub fn new(opts: UserOpts, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
         OutputPhase {
@@ -61,7 +63,7 @@ impl OutputPhase {
             }
         }
 
-        ui.vertical(|ui| {
+        ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
             let stripped = image.path.strip_prefix(&self.opts.root).unwrap_or(&image.path);
 
             ui.add_space(Self::CELL_2_TOP_SPACING);
@@ -71,33 +73,39 @@ impl OutputPhase {
                 .monospace()
                 .size(Self::HEADER_SIZE)
             );
+            ui.add_space(Self::CELL_2_DATA_SPACING);
             if let Some((width, height)) = image.dimm {
                 ui.label(format!("{width}×{height}"));
+                ui.add_space(Self::CELL_2_DATA_SPACING);
             }
             ui.label(format_size(image.file_size, DECIMAL));
-            ui.horizontal(|ui| {
-                let err = if ui.button("Open").clicked() {
-                    opener::open(&image.path)
-                } else if ui.button("Show").clicked() {
-                    opener::reveal(&image.path)
-                } else {
-                    Ok(())
-                };
 
-                if let Err(e) = err {
-                    // It shouldn't be (reasonably) possible to clobber one
-                    // Some modal with another; see comment in draw_output_table().
-                    modal = Err(Modal::new(
-                            "Error showing file".to_string(),
-                            e.to_string(),
-                    ));
-                }
+            ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                ui.add_space(Self::CELL_2_BOTTOM_SPACING);
+                ui.horizontal(|ui| {
+                    let err = if ui.button("Open").clicked() {
+                        opener::open(&image.path)
+                    } else if ui.button("Show").clicked() {
+                        opener::reveal(&image.path)
+                    } else {
+                        Ok(())
+                    };
 
-                if ui.button("Copy path").clicked() {
-                    ui.output_mut(|out| 
-                        out.copied_text = image.path.as_os_str().to_string_lossy().to_string()
-                    );
-                }
+                    if let Err(e) = err {
+                        // It shouldn't be (reasonably) possible to clobber one
+                        // Some modal with another; see comment in draw_output_table().
+                        modal = Err(Modal::new(
+                                "Error showing file".to_string(),
+                                e.to_string(),
+                        ));
+                    }
+
+                    if ui.button("Copy path").clicked() {
+                        ui.output_mut(|out| 
+                            out.copied_text = image.path.as_os_str().to_string_lossy().to_string()
+                        );
+                    }
+                });
             });
         });
 
