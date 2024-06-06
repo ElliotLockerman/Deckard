@@ -1,5 +1,5 @@
 
-use crate::{Phase, Action, Modal, try_act};
+use crate::{Phase, DynPhase, Error, Result};
 use crate::searching_phase::SearchingPhase;
 use crate::searcher::{Searcher, SUPPORTED_EXTS};
 
@@ -19,6 +19,12 @@ pub struct UserOpts {
     pub max_depth: String,
     pub num_worker_threads: String,
     pub exts: String,
+}
+
+impl UserOpts {
+    pub fn take(&mut self) -> UserOpts {
+        std::mem::take(self)
+    }
 }
 
 pub struct StartupPhase {
@@ -52,23 +58,27 @@ impl StartupPhase {
         StartupPhase{opts}
     }
 
+    pub fn into_dyn(self) -> DynPhase {
+        Box::new(self)
+    }
+
     fn default_root() -> PathBuf {
         homedir::get_my_home()
             .unwrap_or_else(|_| Some(PathBuf::from("/")))
             .unwrap_or_else(|| PathBuf::from("/"))
     }
 
-    fn parse_max_depth(&self) -> Result<Option<usize>, Modal> {
+    fn parse_max_depth(&self) -> Result<Option<usize>> {
         let mut max_depth = None;
         if !self.opts.max_depth.is_empty() {
             let depth = self.opts.max_depth.parse::<usize>().map_err(|e| {
-                Modal::new(
+                Error::new(
                     "Error parsing depth limit".to_string(),
                     e.to_string(),
                 )
             })?;
             if depth == 0usize {
-                return Err(Modal::new(
+                return Err(Error::new(
                     "Invalid depth limit".to_string(),
                     "A depth limit of 0 doesn't search at all".to_string(),
                 ));
@@ -78,17 +88,17 @@ impl StartupPhase {
         Ok(max_depth)
     }
 
-    fn parse_num_worker_threads(&self) -> Result<usize, Modal> {
+    fn parse_num_worker_threads(&self) -> Result<usize, Error> {
         let num_worker_threads = self.opts.num_worker_threads.parse::<usize>()
             .map_err(|e| {
-                Modal::new(
+                Error::new(
                     "Error parsing num worker threads".to_string(),
                     e.to_string(),
                 )
             })?;
 
         if num_worker_threads == 0 {
-            return Err(Modal::new(
+            return Err(Error::new(
                 "Invalid num worker threads".to_string(),
                 "At least 1 worker thread is required".to_string(),
             ));
@@ -97,7 +107,7 @@ impl StartupPhase {
         Ok(num_worker_threads)
     }
 
-    fn parse_exts(&self) -> Result<HashSet<String>, Modal> {
+    fn parse_exts(&self) -> Result<HashSet<String>, Error> {
         let exts: HashSet<String> = self.opts.exts
             .split(',')
             .map(|x| x.trim().to_owned())
@@ -106,7 +116,7 @@ impl StartupPhase {
 
         for ext in &exts {
             if !SUPPORTED_EXTS.contains(ext.as_str()) {
-                return Err(Modal::new(
+                return Err(Error::new(
                     "Extension Error".to_owned(),
                     format!("Extension {ext} is not supported"),
                 ));
@@ -116,17 +126,17 @@ impl StartupPhase {
         Ok(exts)
     }
 
-    fn make_searching_phase(&mut self) -> Action {
+    fn make_searching_phase(&mut self) -> Result<DynPhase> {
         if !self.opts.root.exists() {
-            return Action::Modal(Modal::new(
-                    "Path Error".into(),
-                    format!("{} doesn't exist", self.opts.root.display()),
+            return Err(Error::new(
+                "Path Error".into(),
+                format!("{} doesn't exist", self.opts.root.display()),
             ));
         }
 
-        let max_depth = try_act!(self.parse_max_depth());
-        let num_worker_threads = try_act!(self.parse_num_worker_threads());
-        let exts = try_act!(self.parse_exts());
+        let max_depth = self.parse_max_depth()?;
+        let num_worker_threads = self.parse_num_worker_threads()?;
+        let exts = self.parse_exts()?;
 
         let mut searcher = Searcher::new(
             self.opts.root.clone(),
@@ -137,12 +147,12 @@ impl StartupPhase {
         );
         searcher.launch_search();
         let opts = std::mem::take(&mut self.opts);
-        Action::Trans(Box::new(SearchingPhase::new(opts, searcher)))
+        Ok(SearchingPhase::new(opts, searcher).into_dyn())
     }
 }
 
 impl Phase for StartupPhase {
-    fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Action {
+    fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Result<Option<DynPhase>> {
         ui.horizontal(|ui| {
             ui.strong("Root Path: ".to_string());
 
@@ -192,10 +202,10 @@ impl Phase for StartupPhase {
 
         if ui.button("Search").clicked() 
             || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            return self.make_searching_phase();
+            return self.make_searching_phase().map(Some);
         }
 
-        Action::None
+        Ok(None)
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

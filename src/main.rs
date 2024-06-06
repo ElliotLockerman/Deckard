@@ -13,57 +13,52 @@ use eframe::egui;
 
 const MIN_INNER_SIZE: (f32, f32) = (550.0, 400.0);
 
-enum Action {
-    None,
-    Trans(Box<dyn Phase>),
-    Modal(Modal),
-}
-
-// Like question mark operator, but takes a Result<T, Modal>, and on error,
-// returns an Action::Modal(). For use in functions where the error outcome is 
-// an Action::Modal, and the good action is any other Action variant.
-#[macro_export]
-macro_rules! try_act {
-    ($expression:expr) => {
-        match $expression {
-            Ok(x) => x,
-            Err(e) => return Action::Modal(e),
-        }
-    }
-}
+type DynPhase = Box<dyn Phase>;
 
 trait Phase {
-    fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) -> Action;
+    // Returns Ok(Some(next_phase)) for next phase to transition to, Ok(None)
+    // for a successful render with no phase transition, or an error to be
+    // displayed in a modal dialog. The Phase must be in valid state when returning
+    // an error, as render() will be called once the modal is dismissed.
+    fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) -> Result<Option<DynPhase>>;
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-struct Modal {
-    title: String,
-    body: String,
+struct Error {
+    err: String,
+    detail: String,
 }
 
-impl Modal {
-    fn new(title: String, body: String) -> Modal {
-        Modal{title, body}
+impl Error {
+    fn new(err: String, detail: String) -> Error {
+        Error{err, detail}
     }
 
     // Blocks until "Ok" is clicked.
-    fn draw(&self) {
+    fn show_modal(&self) {
         rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
-            .set_title(self.title.clone())
-            .set_description(self.body.clone())
+            .set_title(self.err.clone())
+            .set_description(self.detail.clone())
             .set_buttons(rfd::MessageButtons::Ok)
             .show();
     }
 }
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}: {}", self.err, self.detail)
+    }
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;
+
 ////////////////////////////////////////////////////////////////////////////////
 
 struct App {
-    phase: Box<dyn Phase>,
+    phase: DynPhase,
 }
 
 impl App {
@@ -78,16 +73,11 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            let action = self.phase.render(ctx, ui);
-            match action {
-                Action::None => (),
-                Action::Trans(next) => self.phase = next,
-                Action::Modal(modal) => {
-                    // Shouldn't be possible if Action::Modal is only returned
-                    // respose to a user action (since users can't interact with
-                    // a Phase-controlled widget while a modal is shown).
-                    modal.draw();
-                },
+            let ret = self.phase.render(ctx, ui);
+            match ret {
+                Ok(Some(next_phase)) => self.phase = next_phase,
+                Err(err) => err.show_modal(),
+                _ => (),
             }
         });
     }
