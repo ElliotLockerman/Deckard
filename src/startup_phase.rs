@@ -63,20 +63,17 @@ impl StartupPhase {
     }
 
     fn default_root() -> PathBuf {
-        homedir::get_my_home()
-            .unwrap_or_else(|_| Some(PathBuf::from("/")))
-            .unwrap_or_else(|| PathBuf::from("/"))
+        homedir::get_my_home().ok().flatten().unwrap_or_else(|| PathBuf::from("/"))
     }
 
     fn parse_max_depth(&self) -> Result<Option<usize>> {
         let mut max_depth = None;
         if !self.opts.max_depth.is_empty() {
-            let depth = self.opts.max_depth.parse::<usize>().map_err(|e| {
+            let depth = self.opts.max_depth.parse::<usize>().map_err(|e| 
                 Error::new(
                     "Error parsing depth limit".to_string(),
                     e.to_string(),
-                )
-            })?;
+            ))?;
             if depth == 0usize {
                 return Err(Error::new(
                     "Invalid depth limit".to_string(),
@@ -88,7 +85,7 @@ impl StartupPhase {
         Ok(max_depth)
     }
 
-    fn parse_num_worker_threads(&self) -> Result<usize, Error> {
+    fn parse_num_worker_threads(&self) -> Result<usize> {
         let num_worker_threads = self.opts.num_worker_threads.parse::<usize>()
             .map_err(|e| {
                 Error::new(

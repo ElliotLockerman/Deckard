@@ -30,8 +30,7 @@ impl SearchingPhase {
     fn make_output_phase(&mut self) -> DynPhase {
         assert!(self.searcher.is_finished());
         let results = self.searcher.join();
-        let opts = std::mem::take(&mut self.opts);
-        OutputPhase::new(opts, results.duplicates, results.errors).into_dyn()
+        OutputPhase::new(self.opts.take(), results.duplicates, results.errors).into_dyn()
     }
 }
 
