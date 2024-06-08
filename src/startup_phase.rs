@@ -36,13 +36,10 @@ impl StartupPhase {
     const NUM_WORKER_THREADS_WIDTH: f32 = 30.0;
 
     pub fn new_with_cc(cc: &eframe::CreationContext) -> StartupPhase {
-        let root = match cc.storage {
-            Some(storage) => match storage.get_string(Self::ROOT_KEY) {
-                Some(path) => path.into() ,
-                None =>  Self::default_root(),
-            },
-            None => Self::default_root(),
-        };
+        let root = cc.storage.map(|x| x.get_string(Self::ROOT_KEY))
+            .flatten()
+            .map(Into::into)
+            .unwrap_or_else(|| Self::default_root());
 
         StartupPhase {
             opts: UserOpts {

@@ -87,9 +87,8 @@ impl SearcherInner {
             threads.push(thread::spawn(move || {
                 let hasher = HasherConfig::new().to_hasher();
                 loop {
-                    let path = match queue_c.pop().expect("queue pop error") {
-                        Some(x) => x,
-                        None => return, // We're done!
+                    let Some(path) = queue_c.pop().expect("queue pop error") else {
+                        return; // We're done!
                     };
                     let image = match image::open(path.clone()) {
                         Ok(x) => x,
@@ -162,7 +161,7 @@ impl SearcherInner {
                 match Image::load(path) {
                     Ok(x) => v.push(x),
                     Err(e) => errors.push(e),
-                };
+                }
 
                 if self.cancel.load(Ordering::Relaxed) {
                     return SearchResults::empty();

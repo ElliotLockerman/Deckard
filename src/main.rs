@@ -76,8 +76,8 @@ impl eframe::App for App {
             let ret = self.phase.render(ctx, ui);
             match ret {
                 Ok(Some(next_phase)) => self.phase = next_phase,
+                Ok(None) => (),
                 Err(err) => err.show_modal(),
-                _ => (),
             }
         });
     }
