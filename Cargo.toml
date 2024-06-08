@@ -7,9 +7,7 @@ edition = "2021"
 eframe = {version = "0.27.2", features = ["persistence"]}
 homedir = "0.2.1"
 rfd = "0.14.1"
-magnetic = "2.4.1"
 maplit = "1.0.2"
-num_cpus = "1.16.0"
 walkdir = "2.5.0"
 egui_extras = {version = "0.27.2", features = ["default", "all_loaders", "file", "image"]}
 image = {version = "0.24", features = ["avif", "bmp", "dds", "exr", "gif", "hdr", "ico", "jpeg", "png", "pnm", "qoi", "tga", "tiff", "webp"]}
@@ -18,4 +16,6 @@ humansize = "2.1.3"
 lazy_static = "1.4.0"
 itertools = "0.13.0"
 opener = {version = "0.7.1", features = ["reveal"]}
+rayon = "1.10.0"
+dashmap = { version = "5.5.3", features = ["rayon"] }
 

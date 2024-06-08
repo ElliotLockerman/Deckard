@@ -2,22 +2,23 @@ use crate::misc::Image;
 
 use std::path::PathBuf;
 use std::thread;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::thread::JoinHandle;
 
 use walkdir::WalkDir;
-
-use magnetic::spmc::spmc_queue;
-use magnetic::buffer::dynamic::DynamicBuffer;
-use magnetic::{Producer, Consumer};
 
 use image_hasher::HasherConfig;
 
 use maplit::hashset;
 
 use lazy_static::lazy_static;
+
+use rayon::prelude::*;
+
+use dashmap::{DashMap, DashSet};
+
 
 lazy_static! {
     pub static ref SUPPORTED_EXTS: HashSet<&'static str> = hashset!{
@@ -58,109 +59,81 @@ impl SearchResults {
 struct SearcherInner {
     root: PathBuf,
     follow_sym: bool,
-    num_threads: usize,
     max_depth: Option<usize>,
     exts: HashSet<String>, // Extentions to consider
     cancel: AtomicBool,
 }
 
 impl SearcherInner {
+
     fn search(&self) -> SearchResults {
-        // The size is somewhat arbitrary, but its expected to take longer to
-        // process each unit of work than to produce it, so having twice as large
-        // a buffer as there are worker threads should ensure the workers always
-        // have work waiting.
-        let work_buf = DynamicBuffer::new(2 * self.num_threads)
-            .expect("Error allocationg spmc buffer");
-        let (queue_p, queue_c) = spmc_queue::<Option<std::path::PathBuf>, _>(work_buf);
-        let queue_c = Arc::new(queue_c);
+        let map = DashMap::new();
+        let errors = DashSet::new();
 
-        let map = Arc::new(Mutex::new(HashMap::new()));
-        let errors = Arc::new(Mutex::new(vec![]));
-
-        let mut threads = Vec::new();
-        for _ in 1..=self.num_threads {
-            let queue_c = queue_c.clone();
-            let map = map.clone();
-            let errors = errors.clone();
-
-            threads.push(thread::spawn(move || {
-                let hasher = HasherConfig::new().to_hasher();
-                loop {
-                    let Some(path) = queue_c.pop().expect("queue pop error") else {
-                        return; // We're done!
-                    };
-                    let image = match image::open(path.clone()) {
-                        Ok(x) => x,
-                        Err(e) => {
-                            let err = format!("Error opening image {}: {e}", path.display());
-                            errors.lock().expect("error vec lock error").push(err);
-                            continue;
-                        },
-                    };
-
-                    let hash = hasher.hash_image(&image);
-                    let mut map = map.lock().expect("image hash hashmap lock error");
-                    let v = map.entry(hash).or_insert(Vec::new());
-                    v.push(path);
-                }
-            }));
-        }
-
+        let hasher = HasherConfig::new().to_hasher();
         let mut walker = WalkDir::new(self.root.clone()).follow_links(self.follow_sym);
         if let Some(d) = self.max_depth { walker = walker.max_depth(d); }
-        for entry in walker {
+        let _: Result<(), ()> = walker.into_iter().par_bridge().map(|entry| {
+
+            if self.cancel.load(Ordering::Relaxed) {
+                return Err(());
+            }
+
             let entry = match entry {
                 Ok(x) => x,
                 Err(e) => {
                     let err = format!("Error walking directory: {e}");
-                    errors.lock().expect("error vec lock error").push(err);
-                    continue;
+                    errors.insert(err);
+                    return Ok(());
                 },
             };
-            if entry.file_type().is_dir() { continue; }
+            if entry.file_type().is_dir() {
+                return Ok(());
+            }
 
             let path = entry.path();
-            if let Some(ext) = path.extension() {
-                let s = ext.to_string_lossy();
-                if !self.exts.contains(&*s) { continue; }
-                queue_p.push(Some(path.to_owned())).expect("queue push error");
+            let Some(ext) = path.extension() else {
+                return Ok(());
+            };
+            let s = ext.to_string_lossy();
+            if !self.exts.contains(&*s) {
+                return Ok(());
             }
 
-            if self.cancel.load(Ordering::Relaxed) {
-                break;
-            }
-        }
+            let image = match image::open(path) {
+                Ok(x) => x,
+                Err(e) => {
+                    let err = format!("Error opening image {}: {e}", path.display());
+                    errors.insert(err);
+                    return Ok(())
+                },
+            };
 
-        for _ in 1..=threads.len() {
-            queue_p.push(None).expect("queue push error");
-        }
+            let hash = hasher.hash_image(&image);
+            map.entry(hash).or_insert(DashSet::new()).insert(path.to_path_buf());
 
-        for t in threads {
-            t.join().expect("thread join error");
-        }
+            Ok(())
+        }).collect();
 
-        if self.cancel.load(Ordering::Relaxed) {
-            return SearchResults::empty();
-        }
 
-        let mut errors = Arc::into_inner(errors).expect("arc into_inner error")
-            .into_inner().expect("mutex into_inner error");
-
-        let map = Arc::into_inner(map).expect("arc into_inner error")
-            .into_inner().expect("mutex into_inner");
-
+        // This part doesn't take very long (essentially 0 benefit for 
+        // paralleization), and requires a lot of extra complexity to make it 
+        // cancelable with rayon considering the nested loops.
         let mut duplicates = vec![];
         for (_, dups) in map.into_iter() {
+            if self.cancel.load(Ordering::Relaxed) {
+                return SearchResults::empty();
+            }
+
             if dups.len() <= 1 {
                 continue;
             }
 
             let mut v = vec![];
             for path in dups {
-                match Image::load(path) {
+                match Image::load(path.into()) {
                     Ok(x) => v.push(x),
-                    Err(e) => errors.push(e),
+                    Err(e) => { errors.insert(e); () },
                 }
 
                 if self.cancel.load(Ordering::Relaxed) {
@@ -172,7 +145,7 @@ impl SearcherInner {
 
         SearchResults {
             duplicates,
-            errors,
+            errors: errors.into_iter().collect(),
         }
     }
 
@@ -187,7 +160,6 @@ impl Searcher {
     pub fn new(
         root: PathBuf,
         follow_sym: bool,
-        num_threads: usize,
         max_depth: Option<usize>,
         exts: HashSet<String>
     ) -> Searcher {
@@ -195,7 +167,6 @@ impl Searcher {
             inner: Arc::new(SearcherInner{
                 root,
                 follow_sym,
-                num_threads,
                 max_depth,
                 exts,
                 cancel: AtomicBool::new(false),

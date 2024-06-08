@@ -37,12 +37,8 @@ impl SearchingPhase {
 impl Phase for SearchingPhase {
     fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Result<Option<DynPhase>> {
         if self.searcher.is_finished() {
-            if self.searcher.was_canceled() {
-                self.searcher.join();
-                return Ok(Some(StartupPhase::new_with_opts(self.opts.take()).into_dyn()));
-            } else {
-                return Ok(Some(self.make_output_phase()));
-            }
+            assert!(!self.searcher.was_canceled());
+            return Ok(Some(self.make_output_phase()));
         }
 
         let resp = ui.horizontal(|ui| {

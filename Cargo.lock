@@ -1049,6 +1049,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
+name = "dashmap"
+version = "5.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
+dependencies = [
+ "cfg-if",
+ "hashbrown",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+ "rayon",
+]
+
+[[package]]
 name = "data-url"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1069,6 +1083,7 @@ dependencies = [
 name = "deckard"
 version = "0.1.0"
 dependencies = [
+ "dashmap",
  "eframe",
  "egui_extras",
  "homedir",
@@ -1077,10 +1092,9 @@ dependencies = [
  "image_hasher",
  "itertools 0.13.0",
  "lazy_static",
- "magnetic",
  "maplit",
- "num_cpus",
  "opener",
+ "rayon",
  "rfd",
  "walkdir",
 ]
@@ -2317,15 +2331,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "magnetic"
-version = "2.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdf478b1bdf6a482a166b519c12af5c007459a39df0290015ac7e51aee84ea07"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
 name = "malloc_buf"
 version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2612,16 +2617,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da0df0e5185db44f69b44f26786fe401b6c293d1907744beaa7fa62b2e5a517a"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "num_cpus"
-version = "1.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
-dependencies = [
- "hermit-abi",
- "libc",
 ]
 
 [[package]]
