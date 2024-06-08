@@ -100,11 +100,16 @@ impl SearcherInner {
                 return Ok(());
             }
 
-            let image = match image::open(path) {
-                Ok(x) => x,
-                Err(e) => {
-                    let err = format!("Error opening image {}: {e}", path.display());
-                    errors.insert(err);
+            // I have seen image::open() panic on (presumably) malformed files.
+            let image = match std::panic::catch_unwind(|| image::open(path)) {
+                Ok(Ok(x)) => x,
+                err => { 
+                    let msg = match err {
+                        Err(_) => format!("Panic opening image {}", path.display()),
+                        Ok(Err(e)) => format!("Error opening image {}: {e}", path.display()),
+                        Ok(Ok(_)) => unreachable!(),
+                    };
+                    errors.insert(msg);
                     return Ok(())
                 },
             };
