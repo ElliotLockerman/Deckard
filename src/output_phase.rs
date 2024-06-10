@@ -1,4 +1,7 @@
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::{Phase, DynPhase, Result, Error};
 use crate::startup_phase::{StartupPhase, UserOpts};
 use crate::misc::Image;
@@ -10,9 +13,11 @@ use humansize::{format_size, DECIMAL};
 
 pub struct OutputPhase {
     opts: UserOpts,
-    update_count: std::num::Saturating<usize>,
+    first_update: bool,
     images: Vec<Vec<Image>>, // [set of duplicates][duplicate in set]
+    flattened_images: Vec<Image>,
     errors: Vec<String>,
+    show_errors: Arc<AtomicBool>,
 }
 
 impl OutputPhase {
@@ -28,9 +33,11 @@ impl OutputPhase {
     pub fn new(opts: UserOpts, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
         OutputPhase {
             opts,
-            update_count: std::num::Saturating(0usize),
+            first_update: true,
+            flattened_images: images.iter().map(|x| x.clone()).flatten().collect(),
             images,
             errors,
+            show_errors: Arc::new(AtomicBool::new(true)),
         }
     }
 
@@ -38,27 +45,23 @@ impl OutputPhase {
         Box::new(self)
     }
 
-    fn draw_output_row(&self, ui: &mut egui::Ui, row: usize, image: &Image) -> Result<()> {
+    fn draw_output_row(&self, ui: &mut egui::Ui, image: &Image) -> Result<()> {
 
         let mut ret = Ok(());
 
-        // Space out showing the images instead of blocking untill they're all
-        // ready (they're slow to show for the first time).
-        if self.update_count.0 > row {
-            let resp = ui.centered_and_justified(|ui| {
-                ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
-                        image.path.display().to_string(),
-                        image.buffer.clone()
-                )))
-            });
+        let resp = ui.centered_and_justified(|ui| {
+            ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
+                    image.path.display().to_string(),
+                    image.buffer.clone()
+            )))
+        });
 
-            if resp.inner.clicked() {
-                if let Err(e) = opener::open(&image.path) {
-                    ret = Err(Error::new(
-                            "Error showing file".to_string(),
-                            e.to_string(),
-                    ));
-                }
+        if resp.inner.clicked() {
+            if let Err(e) = opener::open(&image.path) {
+                ret = Err(Error::new(
+                        "Error showing file".to_string(),
+                        e.to_string(),
+                ));
             }
         }
 
@@ -114,52 +117,69 @@ impl OutputPhase {
     // Actually draws multiple tables, one per set of duplicates, but it looks
     // like one big table with multiple sections. Also draws all errors reported
     // by Searcher.
-    fn draw_output_table(&mut self,  ui: &mut egui::Ui) -> Result<()> {
+    fn draw_output_table(&mut self, ui: &mut egui::Ui) -> Result<()> {
         let mut ret = Ok(());
 
         let mut scroll = egui::ScrollArea::vertical().drag_to_scroll(false);
 
         // Scroll offset is persistent, and I can't find a way to opt-out for
         // a single widget. This overrides it manually.
-        if self.update_count.0 == 1 {
+        if self.first_update {
             scroll = scroll.vertical_scroll_offset(0.0);
+            self.first_update = false;
         }
 
-        scroll.show(ui, |ui| {
-            for (dup_idx, dups) in self.images.iter().enumerate() {
-                egui::Grid::new(dup_idx)
-                    .striped(true)
-                    .min_col_width(Self::MIN_CELL_SIZE)
-                    .min_row_height(Self::MIN_CELL_SIZE)
-                    .spacing((Self::H_SPACING, ui.spacing().item_spacing.y))
-                    .num_columns(2)
-                    .show(ui, |ui| {
+        let total_rows = self.flattened_images.len();
+        scroll.show_rows(ui, Self::MIN_CELL_SIZE, total_rows, |ui, range| {
+            egui::Grid::new(0)
+                .striped(true)
+                .min_col_width(Self::MIN_CELL_SIZE)
+                .min_row_height(Self::MIN_CELL_SIZE)
+                .spacing((Self::H_SPACING, ui.spacing().item_spacing.y))
+                .num_columns(2)
+                .show(ui, |ui| {
 
-                    for image in dups {
-                        if let Err(m) = self.draw_output_row(ui, dup_idx, image) {
-                            ret = Err(m);
-                        }
-                        ui.end_row();
+                for idx in range {
+                    if let Err(m) = self.draw_output_row(ui, &self.flattened_images[idx]) {
+                        ret = Err(m);
+                    }
+                    ui.end_row();
+                }
+            });
+        });
+
+        ret
+    }
+
+    fn draw_errors(&mut self, ctx: &egui::Context) {
+        if self.errors.is_empty() || !self.show_errors.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let vb = egui::viewport::ViewportBuilder::default().with_title("Errors");
+        let vid = egui::viewport::ViewportId::from_hash_of("error window");
+        let show_errors = self.show_errors.clone();
+        let errors = self.errors.clone();
+        ctx.show_viewport_deferred(vid, vb, move |ctx, _| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                if ctx.input(|i| i.viewport().close_requested()) {
+                    show_errors.store(false, Ordering::Relaxed);
+                    return;
+                }
+
+                egui::ScrollArea::vertical().drag_to_scroll(false).show(ui, |ui| {
+                    ui.heading(egui::RichText::new("Errors").color(egui::Color32::RED));
+                    for err in &errors {
+                        ui.label(err);
                     }
                 });
-                ui.separator();
-            }
-
-            if !self.errors.is_empty() {
-                ui.heading(egui::RichText::new("Errors").color(egui::Color32::RED));
-                for err in &self.errors {
-                    ui.label(err);
-                }
-            }
+            });
         });
-        
-        ret
     }
 }
 
 impl Phase for OutputPhase {
-    fn render(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) -> Result<Option<DynPhase>> {
-        self.update_count += 1;
+    fn render(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) -> Result<Option<DynPhase>> {
         let resp = ui.horizontal(|ui| {
             if ui.button("<- New Search").clicked() {
                 return Some(StartupPhase::new_with_opts(self.opts.take()).into_dyn());
@@ -170,10 +190,25 @@ impl Phase for OutputPhase {
 
             None
         });
-
+        
         if resp.inner.is_some() {
             return Ok(resp.inner);
         }
+
+        // A button to toggle showing the error window (if there were any errors).
+        // I can't figure out where to put the button, and I'm not sure its really
+        // necessary, but I'm leaving it here for the future.
+        /*
+        if !self.errors.is_empty() {
+            ui.add_space(4.0);
+            let old_show_errors = self.show_errors.load(Ordering::Relaxed);
+            let text = if old_show_errors { "Hide Errors" } else { "Show Errors" };
+            if ui.button(text).clicked() {
+                // TODO: change to fetch_not() once stable.
+                self.show_errors.store(!old_show_errors, Ordering::Relaxed);
+            }
+        }
+        */
 
         ui.separator();
 
@@ -182,6 +217,7 @@ impl Phase for OutputPhase {
         }
 
         self.draw_output_table(ui)?;
+        self.draw_errors(ctx);
 
         Ok(None)
     }

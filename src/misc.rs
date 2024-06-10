@@ -3,6 +3,7 @@ use std::io::Read;
 
 use crate::egui::load::Bytes;
 
+#[derive(Clone)]
 pub struct Image {
     pub path: PathBuf,
     pub buffer: Bytes,
