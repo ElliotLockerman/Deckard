@@ -41,7 +41,7 @@ impl OutputPhase {
         OutputPhase {
             opts,
             first_update: true,
-            flattened_images: images.iter().map(|x| x.clone()).flatten().collect(),
+            flattened_images: images.iter().flat_map(|x| x.clone()).collect(),
             last_indices,
             images,
             errors,

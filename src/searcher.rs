@@ -136,9 +136,9 @@ impl SearcherInner {
 
             let mut v = vec![];
             for path in dups {
-                match Image::load(path.into()) {
+                match Image::load(path) {
                     Ok(x) => v.push(x),
-                    Err(e) => { errors.insert(e); () },
+                    Err(e) => { errors.insert(e); },
                 }
 
                 if self.cancel.load(Ordering::Relaxed) {

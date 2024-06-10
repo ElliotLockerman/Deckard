@@ -12,7 +12,7 @@ use startup_phase::StartupPhase;
 use eframe::egui;
 
 const MIN_INNER_SIZE: (f32, f32) = (550.0, 400.0);
-const ROOT_KEY: &'static str = "STARTUPPHASE_ROOT";
+const ROOT_KEY: &str = "STARTUPPHASE_ROOT";
 
 type DynPhase = Box<dyn Phase>;
 

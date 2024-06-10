@@ -35,10 +35,9 @@ pub struct StartupPhase {
 impl StartupPhase {
 
     pub fn new_with_cc(cc: &eframe::CreationContext) -> StartupPhase {
-        let root = cc.storage.map(|x| x.get_string(ROOT_KEY))
-            .flatten()
+        let root = cc.storage.and_then(|x| x.get_string(ROOT_KEY))
             .map(Into::into)
-            .unwrap_or_else(|| Self::default_root());
+            .unwrap_or_else(Self::default_root);
 
         StartupPhase {
             opts: UserOpts {
