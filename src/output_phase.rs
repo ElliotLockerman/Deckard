@@ -2,6 +2,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::ROOT_KEY;
 use crate::{Phase, DynPhase, Result, Error};
 use crate::startup_phase::{StartupPhase, UserOpts};
 use crate::misc::Image;
@@ -220,6 +221,10 @@ impl Phase for OutputPhase {
         self.draw_errors(ctx);
 
         Ok(None)
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string(ROOT_KEY, self.opts.root.to_string_lossy().into());
     }
 }
 

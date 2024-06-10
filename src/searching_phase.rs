@@ -1,4 +1,6 @@
 
+use crate::ROOT_KEY;
+
 use crate::{Phase, DynPhase, Result};
 use crate::startup_phase::{StartupPhase, UserOpts};
 use crate::output_phase::OutputPhase;
@@ -69,6 +71,10 @@ impl Phase for SearchingPhase {
         });
 
         Ok(None)
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string(ROOT_KEY, self.opts.root.to_string_lossy().into());
     }
 }
 

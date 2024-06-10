@@ -1,4 +1,6 @@
 
+use crate::ROOT_KEY;
+
 use crate::{Phase, DynPhase, Error, Result};
 use crate::searching_phase::SearchingPhase;
 use crate::searcher::{Searcher, SUPPORTED_EXTS};
@@ -31,10 +33,9 @@ pub struct StartupPhase {
 }
 
 impl StartupPhase {
-    const ROOT_KEY: &'static str = "STARTUPPHASE_ROOT";
 
     pub fn new_with_cc(cc: &eframe::CreationContext) -> StartupPhase {
-        let root = cc.storage.map(|x| x.get_string(Self::ROOT_KEY))
+        let root = cc.storage.map(|x| x.get_string(ROOT_KEY))
             .flatten()
             .map(Into::into)
             .unwrap_or_else(|| Self::default_root());
@@ -173,7 +174,7 @@ impl Phase for StartupPhase {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        storage.set_string(Self::ROOT_KEY, self.opts.root.to_string_lossy().into());
+        storage.set_string(ROOT_KEY, self.opts.root.to_string_lossy().into());
     }
 }
 
