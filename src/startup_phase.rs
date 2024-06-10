@@ -82,7 +82,7 @@ impl StartupPhase {
     fn parse_exts(&self) -> Result<HashSet<String>, Error> {
         let exts: HashSet<String> = self.opts.exts
             .split(',')
-            .map(|x| x.trim().to_owned())
+            .map(|x| x.trim().trim_start_matches('.').to_owned())
             .filter(|x| !x.is_empty())
             .collect();
 
