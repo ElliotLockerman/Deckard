@@ -1,6 +1,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashSet;
 
 use crate::ROOT_KEY;
 use crate::{Phase, DynPhase, Result, Error};
@@ -17,6 +18,7 @@ pub struct OutputPhase {
     first_update: bool,
     images: Vec<Vec<Image>>, // [set of duplicates][duplicate in set]
     flattened_images: Vec<Image>,
+    last_indices: HashSet<usize>, // Index in flattened_images of last image in hash bucket
     errors: Vec<String>,
     show_errors: Arc<AtomicBool>,
 }
@@ -32,10 +34,15 @@ impl OutputPhase {
     const CELL_2_DATA_SPACING: f32 = 3.0;
 
     pub fn new(opts: UserOpts, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
+        let last_indices = images.iter()
+            .scan(usize::MAX, |total, dups| {*total += dups.len(); Some(*total)})
+            .collect();
+
         OutputPhase {
             opts,
             first_update: true,
             flattened_images: images.iter().map(|x| x.clone()).flatten().collect(),
+            last_indices,
             images,
             errors,
             show_errors: Arc::new(AtomicBool::new(true)),
@@ -46,15 +53,19 @@ impl OutputPhase {
         Box::new(self)
     }
 
-    fn draw_output_row(&self, ui: &mut egui::Ui, image: &Image) -> Result<()> {
+    fn draw_output_row(&self, ui: &mut egui::Ui, image: &Image, last_in_group: bool) -> Result<()> {
 
         let mut ret = Ok(());
 
         let resp = ui.centered_and_justified(|ui| {
-            ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
+            let resp = ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
                     image.path.display().to_string(),
                     image.buffer.clone()
-            )))
+            )));
+            if last_in_group {
+                ui.separator();
+            }
+            resp
         });
 
         if resp.inner.clicked() {
@@ -84,7 +95,12 @@ impl OutputPhase {
             ui.label(format_size(image.file_size, DECIMAL));
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                ui.add_space(Self::CELL_2_BOTTOM_SPACING);
+                let sep_height = if last_in_group {
+                    ui.separator().rect.height().clamp(0.0, Self::CELL_2_BOTTOM_SPACING)
+                } else {
+                    0.0
+                };
+                ui.add_space(Self::CELL_2_BOTTOM_SPACING - sep_height);
                 ui.horizontal(|ui| {
                     let err = if ui.button("Open").clicked() {
                         opener::open(&image.path)
@@ -141,7 +157,8 @@ impl OutputPhase {
                 .show(ui, |ui| {
 
                 for idx in range {
-                    if let Err(m) = self.draw_output_row(ui, &self.flattened_images[idx]) {
+                    let last = self.last_indices.contains(&idx);
+                    if let Err(m) = self.draw_output_row(ui, &self.flattened_images[idx], last) {
                         ret = Err(m);
                     }
                     ui.end_row();
