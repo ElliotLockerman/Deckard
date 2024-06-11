@@ -19,6 +19,8 @@ use rayon::prelude::*;
 
 use dashmap::{DashMap, DashSet};
 
+use image_hasher::HashAlg;
+
 
 lazy_static! {
     pub static ref SUPPORTED_EXTS: HashSet<&'static str> = hashset!{
@@ -58,6 +60,7 @@ impl SearchResults {
 
 struct SearcherInner {
     root: PathBuf,
+    hash: HashAlg,
     follow_sym: bool,
     max_depth: Option<usize>,
     exts: HashSet<String>, // Extentions to consider
@@ -70,7 +73,7 @@ impl SearcherInner {
         let map = DashMap::new();
         let errors = DashSet::new();
 
-        let hasher = HasherConfig::new().to_hasher();
+        let hasher = HasherConfig::new().hash_alg(self.hash).to_hasher();
         let mut walker = WalkDir::new(self.root.clone()).follow_links(self.follow_sym);
         if let Some(d) = self.max_depth { walker = walker.max_depth(d); }
         let _: Result<(), ()> = walker.into_iter().par_bridge().map(|entry| {
@@ -174,6 +177,7 @@ pub struct Searcher {
 impl Searcher {
     pub fn new(
         root: PathBuf,
+        hash: HashAlg,
         follow_sym: bool,
         max_depth: Option<usize>,
         exts: HashSet<String>
@@ -181,6 +185,7 @@ impl Searcher {
         Searcher {
             inner: Arc::new(SearcherInner{
                 root,
+                hash,
                 follow_sym,
                 max_depth,
                 exts,

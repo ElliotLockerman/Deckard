@@ -13,20 +13,41 @@ use egui::widgets::text_edit::TextEdit;
 
 use itertools::Itertools;
 
+use image_hasher::HashAlg;
+
+
 // User options
-#[derive(Default)]
 pub struct UserOpts {
     pub root: PathBuf,
     pub follow_sym: bool,
     pub max_depth: String,
     pub exts: String,
+    pub hash: HashAlg,
 }
 
 impl UserOpts {
+    pub fn new(root: PathBuf) -> Self {
+        UserOpts {
+            root,
+            exts: SUPPORTED_EXTS.iter().join(","),
+            hash: HashAlg::Gradient,
+            follow_sym: false,
+            max_depth: "".to_owned(),
+        }
+    }
+
     pub fn take(&mut self) -> UserOpts {
         std::mem::take(self)
     }
 }
+
+impl Default for UserOpts {
+    fn default() -> Self {
+        Self::new(PathBuf::default())
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 pub struct StartupPhase {
     opts: UserOpts,
@@ -40,11 +61,7 @@ impl StartupPhase {
             .unwrap_or_else(Self::default_root);
 
         StartupPhase {
-            opts: UserOpts {
-                root,
-                exts: SUPPORTED_EXTS.iter().join(","),
-                ..Default::default()
-            },
+            opts: UserOpts::new(root),
         }
     }
 
@@ -111,6 +128,7 @@ impl StartupPhase {
 
         let mut searcher = Searcher::new(
             self.opts.root.clone(),
+            self.opts.hash,
             self.opts.follow_sym,
             max_depth,
             exts,
@@ -148,6 +166,27 @@ impl Phase for StartupPhase {
                 ui.label("Follow Symlinks:");
                 ui.checkbox(&mut self.opts.follow_sym, "");
                 ui.end_row();
+                ui.end_row();
+
+                ui.label("Hash Algorithm:");
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.opts.hash, HashAlg::Mean, "Mean");
+                    ui.selectable_value(&mut self.opts.hash, HashAlg::Gradient, "Gradient");
+                    ui.selectable_value(&mut self.opts.hash, HashAlg::VertGradient, "VertGradient");
+                    ui.selectable_value(&mut self.opts.hash, HashAlg::DoubleGradient, "DoubleGradient");
+                    ui.selectable_value(&mut self.opts.hash, HashAlg::Blockhash, "Blockhash");
+                });
+                ui.end_row();
+
+                ui.label("More Info:");
+                ui.add(
+                    egui::widgets::Hyperlink::from_label_and_url(
+                        "link",
+                        "https://github.com/qarmin/img_hash/blob/23c3a436b92fc90c37346163c820bfdc5f2225c6/src/alg/mod.rs#L10-L76",
+                    )
+                );
+                ui.end_row();
+                ui.end_row();
 
                 ui.label("Extensions:");
                 let textedit = TextEdit::singleline(&mut self.opts.exts)
@@ -155,7 +194,7 @@ impl Phase for StartupPhase {
                 ui.add(textedit);
                 ui.end_row();
 
-                ui.label("Supported Extensions:");
+                ui.label("Supported:");
                 ui.label(SUPPORTED_EXTS.iter().join(","));
                 ui.end_row();
 
