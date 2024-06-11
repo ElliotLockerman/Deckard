@@ -31,7 +31,7 @@ impl SearchingPhase {
 
     fn make_output_phase(&mut self) -> DynPhase {
         assert!(self.searcher.is_finished());
-        let results = self.searcher.join();
+        let results = self.searcher.wait_for_search();
         OutputPhase::new(self.opts.take(), results.duplicates, results.errors).into_dyn()
     }
 }

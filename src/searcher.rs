@@ -153,12 +153,22 @@ impl SearcherInner {
             errors: errors.into_iter().collect(),
         }
     }
-
 }
 
+pub type PhantomUnsync = std::marker::PhantomData<std::cell::Cell<()>>;
+pub type PhantomUnsend = std::marker::PhantomData<std::sync::MutexGuard<'static, ()>>;
+
+// Designed for (and only tested for) a single run, but in principle could be
+// used again after wait_for_search(). Not Sync or Send because of the Relaxed
+// accesses to store - if you call cancel(), then another thread calls
+// was_canceled(), it may get false, even if it sees other data up-to-date. This
+// doesn't matter for the worker threads because the check repeatedly, and
+// canceling is eventual.
 pub struct Searcher {
     inner: Arc<SearcherInner>,
     thread: Option<JoinHandle<SearchResults>>,
+    unsync: PhantomUnsync,
+    unsend: PhantomUnsend,
 }
 
 impl Searcher {
@@ -177,6 +187,8 @@ impl Searcher {
                 cancel: AtomicBool::new(false),
             }),
             thread: None,
+            unsync: Default::default(),
+            unsend: Default::default(),
         }
     }
     
@@ -184,13 +196,15 @@ impl Searcher {
         self.inner.cancel.store(true, Ordering::Relaxed);
     }
 
-    // TODO: if both this and cancel() are relaxed, is a single thread that calls
-    // cancel() then was_canceled() be guarenteed to see was_canceled() return true?
     pub fn was_canceled(&self) -> bool {
         self.inner.cancel.load(Ordering::Relaxed)
     }
 
     pub fn launch_search(&mut self) {
+        assert!(
+            !self.thread.is_some(),
+            "launch_search() called twice without wait_for_search() between"
+        );
         self.inner.cancel.store(false, Ordering::Relaxed);
         let inner = self.inner.clone();
         self.thread = Some(thread::spawn(move || {
@@ -198,19 +212,20 @@ impl Searcher {
         }));
     }
     
-    // Panics if not launch_search was never called or hasn't been called since
-    // the previous join()
+    // Panics if not launch_search was never called or hasn't been called (or if
+    // join() was already called)
     pub fn is_finished(&self) -> bool {
         self.thread.as_ref()
-            .expect("thread missing (was search_async() called?)")
+            .expect("thread missing")
             .is_finished()
     }
     
-    // Panics if not search_async was never called
+    // Panics if not search_async was never called (or if join() was already
+    // called)
     // Panics on thread join errors
-    pub fn join(&mut self) -> SearchResults {
+    pub fn wait_for_search(&mut self) -> SearchResults {
         self.thread.take()
-            .expect("thread missing (was search_async() called?)")
+            .expect("thread missing")
             .join()
             .expect("thread join error")
 
