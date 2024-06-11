@@ -2,6 +2,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashSet;
+use std::num::Wrapping;
 
 use crate::ROOT_KEY;
 use crate::{Phase, DynPhase, Result, Error};
@@ -35,7 +36,7 @@ impl OutputPhase {
 
     pub fn new(opts: UserOpts, images: Vec<Vec<Image>>, errors: Vec<String>) -> OutputPhase {
         let last_indices = images.iter()
-            .scan(usize::MAX, |total, dups| {*total += dups.len(); Some(*total)})
+            .scan(Wrapping(usize::MAX), |total, dups| {*total += dups.len(); Some(total.0)})
             .collect();
 
         OutputPhase {
