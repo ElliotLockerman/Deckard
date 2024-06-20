@@ -7,9 +7,12 @@ mod output_phase;
 mod searcher;
 mod misc;
 
+use std::sync::Arc;
+
 use startup_phase::StartupPhase;
 
 use eframe::egui;
+use egui::viewport::IconData;
 
 const MIN_INNER_SIZE: (f32, f32) = (550.0, 400.0);
 const ROOT_KEY: &str = "STARTUPPHASE_ROOT";
@@ -90,10 +93,33 @@ impl eframe::App for App {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+fn load_icon() -> Arc<IconData> {
+    let image_ret = image::load_from_memory(include_bytes!("../app_files/icon.png"))
+        .map(|x| x.into_rgb8());
+
+    let image = match image_ret {
+        Ok(x) => x,
+        Err(_) => {
+            // TODO: logging
+            return std::sync::Arc::new(egui::viewport::IconData::default());
+        },
+    };
+
+    let (width, height) = image.dimensions();
+    let data = IconData {
+        rgba: image.into_raw(),
+        width,
+        height,
+    };
+
+    Arc::new(data)
+}
+
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_min_inner_size(MIN_INNER_SIZE),
+            .with_min_inner_size(MIN_INNER_SIZE)
+            .with_icon(load_icon()),
         ..Default::default()
     };
     eframe::run_native(

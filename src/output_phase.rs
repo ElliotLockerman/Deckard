@@ -56,12 +56,14 @@ impl OutputPhase {
 
     fn draw_output_row(&self, ui: &mut egui::Ui, image: &Image, last_in_group: bool) -> Result<()> {
 
+        // It shouldn't be (reasonably) possible to clobber one Some() modal
+        // with another; see comment in draw_output_table().
         let mut ret = Ok(());
 
         let resp = ui.centered_and_justified(|ui| {
             let resp = ui.add(egui::widgets::ImageButton::new(egui::Image::from_bytes(
-                    image.path.display().to_string(),
-                    image.buffer.clone()
+                image.path.display().to_string(),
+                image.buffer.clone()
             )));
             if last_in_group {
                 ui.separator();
@@ -72,8 +74,8 @@ impl OutputPhase {
         if resp.inner.clicked() {
             if let Err(e) = opener::open(&image.path) {
                 ret = Err(Error::new(
-                        "Error showing file".to_string(),
-                        e.to_string(),
+                    "Error showing file".to_string(),
+                    e.to_string(),
                 ));
             }
         }
@@ -85,10 +87,11 @@ impl OutputPhase {
 
             ui.label(
                 egui::RichText::new(stripped.display().to_string())
-                .monospace()
-                .size(Self::HEADER_SIZE)
+                    .monospace()
+                    .size(Self::HEADER_SIZE)
             );
             ui.add_space(Self::CELL_2_DATA_SPACING);
+
             if let Some((width, height)) = image.dimm {
                 ui.label(format!("{width}×{height}"));
                 ui.add_space(Self::CELL_2_DATA_SPACING);
@@ -112,8 +115,6 @@ impl OutputPhase {
                     };
 
                     if let Err(e) = err {
-                        // It shouldn't be (reasonably) possible to clobber one
-                        // Some modal with another; see comment in draw_output_table().
                         ret = Err(Error::new(
                                 "Error showing file".to_string(),
                                 e.to_string(),
@@ -136,6 +137,12 @@ impl OutputPhase {
     // like one big table with multiple sections. Also draws all errors reported
     // by Searcher.
     fn draw_output_table(&mut self, ui: &mut egui::Ui) -> Result<()> {
+
+        // These errors are only in response to user actions, and it would be
+        // inhuman to produce more than one event per update, so I'm assuming a
+        // Some() ret will never be clobbered. These functions don't update any
+        // critical state, so if they somehow did, and the first had an error,
+        // the worst that would happen is they would try again.
         let mut ret = Ok(());
 
         let mut scroll = egui::ScrollArea::vertical().drag_to_scroll(false);

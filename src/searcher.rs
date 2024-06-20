@@ -58,6 +58,11 @@ impl SearchResults {
     }
 }
 
+// SearcherInner is the actual state state involved in setting up a search and
+// executing it. This stuff is kept in a separate struct so it can Arced and
+// shared between the GUI thread owning Searcher and the worker thread (most of
+// it could just be moved, but SearcherInner::cancel couldn't be and this
+// simplifies things).
 struct SearcherInner {
     root: PathBuf,
     hash: HashAlg,
@@ -75,7 +80,14 @@ impl SearcherInner {
 
         let hasher = HasherConfig::new().hash_alg(self.hash).to_hasher();
         let mut walker = WalkDir::new(self.root.clone()).follow_links(self.follow_sym);
-        if let Some(d) = self.max_depth { walker = walker.max_depth(d); }
+        if let Some(d) = self.max_depth {
+            walker = walker.max_depth(d);
+        }
+
+        // The lambda returns Err(()) to break out of the iteration if it was
+        // canceled, otherwise Ok(()) is returned, regardless if there was
+        // an error. Actual errors are kept in the error variable and do not
+        // preclude continuing execution.
         let _: Result<(), ()> = walker.into_iter().par_bridge().map(|entry| {
 
             if self.cancel.load(Ordering::Relaxed) {
@@ -85,8 +97,7 @@ impl SearcherInner {
             let entry = match entry {
                 Ok(x) => x,
                 Err(e) => {
-                    let err = format!("Error walking directory: {e}");
-                    errors.insert(err);
+                    errors.insert(format!("Error walking directory: {e}"));
                     return Ok(());
                 },
             };
@@ -124,9 +135,9 @@ impl SearcherInner {
         }).collect();
 
 
-        // This part doesn't take very long (essentially 0 benefit for 
-        // paralleization), and requires a lot of extra complexity to make it 
-        // cancelable with rayon considering the nested loops.
+        // This part doesn't take very long (and I see essentially 0 benefit for
+        // paralleization), and would require a lot of extra complexity to make
+        // it cancelable with rayon considering the nested loops.
         let mut duplicates = vec![];
         for (_, dups) in map.into_iter() {
             if self.cancel.load(Ordering::Relaxed) {
@@ -158,9 +169,13 @@ impl SearcherInner {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
 pub type PhantomUnsync = std::marker::PhantomData<std::cell::Cell<()>>;
 pub type PhantomUnsend = std::marker::PhantomData<std::sync::MutexGuard<'static, ()>>;
 
+// Searcher is the public interface. Allows starting a search in the background,
+// check if its completed, and blocking until completion and getting the results.
 // Designed for (and only tested for) a single run, but in principle could be
 // used again after wait_for_search(). Not Sync or Send because of the Relaxed
 // accesses to store - if you call cancel(), then another thread calls
