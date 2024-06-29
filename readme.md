@@ -7,7 +7,9 @@ Deckard is a Rust program for finding duplicate images. It recursively walks a f
 
 # Building
 
-`cargo build` works fine.
+You can use `cargo build [--release]` to build a bare binary.
 
-On Mac OS, you can also use `build.sh`; this runs `cargo build`, then `/scripts/make-app.sh`, which builds `Deckard.app` (in `target/{BUILD_MODE}/Deckard.app`).
+On Mac OS, `build_macos.sh` runs `cargo build`, then `/scripts/make-app.sh`, which builds `Deckard.app` (in `target/{BUILD_MODE}/Deckard.app`).
+
+Deckard also supports being bundled in to an app on multiple platforms with [cargo-bundle](https://github.com/burtonageo/cargo-bundle); the app will be built in `target/{BUILD_MODE}/bundle/{PLATFORM}/`. 
 

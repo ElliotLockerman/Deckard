@@ -2,6 +2,12 @@
 name = "deckard"
 version = "0.1.0"
 edition = "2021"
+description = "Duplicate image finder"
+
+[package.metadata.bundle]
+name = "Deckard"
+identifier = "com.lockerman.Deckard"
+icon = ["app_files/AppIcon.icns"]
 
 [dependencies]
 eframe = {version = "0.27.2", features = ["persistence"]}
